@@ -1,0 +1,14 @@
+{
+  "name": "Coach's Sideline",
+  "short_name": "Sideline",
+  "description": "U8 AYSO lineup and playing-time tracker",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f4f2ea",
+  "theme_color": "#2f7d4f",
+  "icons": [
+    { "src": "/icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

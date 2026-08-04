@@ -1,0 +1,31 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "coach-sideline",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-08-01",
+
+  // Serve the static app from ./public, but run the Worker first for /api/* so the
+  // API isn't shadowed by a static file. Everything else is served straight from assets.
+  "assets": {
+    "directory": "./public/",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+
+  // D1 binding. Fill in database_id after `npm run db:create` (or `wrangler d1 create`).
+  "d1_databases": [
+    {
+      "binding": "coach_sideline_db",
+      "database_name": "coach-sideline-db",
+      "database_id": "0c526ef9-78a5-44a1-89c6-11b44dd4f85e"
+    }
+  ],
+
+  "observability": { "enabled": true }
+
+  // To serve at coach.mitchellsholly.com:
+  //   Easiest: after first deploy, add a Custom Domain in the dashboard
+  //   (Workers & Pages -> coach-sideline -> Settings -> Domains & Routes -> Add -> Custom Domain).
+  //   Or uncomment the route below and redeploy (Cloudflare creates the DNS record for you):
+  // ,"routes": [{ "pattern": "coach.mitchellsholly.com", "custom_domain": true }]
+}

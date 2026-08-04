@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "bugs": [
+    {
+      "id": "bug-001",
+      "timestamp": "2026-08-04T03:36:49.107Z",
+      "error_message": "Significant refactor of ",
+      "file": "public/index.html",
+      "root_cause": "4 lines replaced/restructured",
+      "fix": "Rewrote 14→10 lines (4 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "html"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T03:36:49.107Z"
+    },
+    {
+      "id": "bug-002",
+      "timestamp": "2026-08-04T03:37:27.154Z",
+      "error_message": "Incorrect value in code",
+      "file": "public/app.js",
+      "root_cause": "Had \"><span class=\"",
+      "fix": "Changed to \"><button class=\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-08-04T03:37:33.238Z"
+    },
+    {
+      "id": "bug-003",
+      "timestamp": "2026-08-04T03:37:28.561Z",
+      "error_message": "Wrong return value",
+      "file": "public/app.js",
+      "root_cause": "Was returning: '<article class=\"drill\">'",
+      "fix": "Now returns: '<article class=\"drill\" id=\"drill-'+d.id+'\">'",
+      "tags": [
+        "auto-detected",
+        "return-value",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T03:37:28.561Z"
+    },
+    {
+      "id": "bug-004",
+      "timestamp": "2026-08-04T03:37:52.346Z",
+      "error_message": "CSS fix: display",
+      "file": "public/app.css",
+      "root_cause": "display: flex → inline-flex",
+      "fix": "Changed display: flex → inline-flex",
+      "tags": [
+        "auto-detected",
+        "style-fix",
+        "css"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T03:37:52.346Z"
+    }
+  ]
+}

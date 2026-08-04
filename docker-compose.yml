@@ -1,0 +1,11 @@
+services:
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: coach-app-tunnel
+    restart: unless-stopped
+    command: tunnel --config /etc/cloudflared/config.yml run coach-app-dev
+    volumes:
+      - ${USERPROFILE}/.cloudflared/coach-app-dev-config.yml:/etc/cloudflared/config.yml:ro
+      - ${USERPROFILE}/.cloudflared/fa276771-279f-40ac-b8d2-2b5b20e5adb8.json:/etc/cloudflared/fa276771-279f-40ac-b8d2-2b5b20e5adb8.json:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

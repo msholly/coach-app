@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Coach's Sideline — U8 AYSO</title>
+
+<!-- Add to Home Screen: launches without Safari's URL bar. -->
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Sideline">
+<meta name="theme-color" content="#f4f2ea" media="(prefers-color-scheme:light)">
+<meta name="theme-color" content="#131711" media="(prefers-color-scheme:dark)">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+
+<div class="wrap">
+<div class="app">
+
+  <header class="board">
+    <div class="brandrow">
+      <div class="crest" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4" opacity=".6"/><circle cx="12" cy="12" r="3.4" fill="currentColor" stroke="none"/></svg>
+      </div>
+      <div class="brand">
+        <h1 id="hdrTitle">Coach's Sideline</h1>
+        <div class="sub">U8 AYSO · 6v6 w/ keeper · Everyone plays</div>
+      </div>
+      <span class="spacer"></span>
+      <span class="synctools" id="syncTools" hidden>
+        <span class="syncpill" id="syncPill" data-state="local"><span class="syncdot"></span><span id="syncText">Local only</span></span>
+        <select id="teamSel" class="teamsel no-print" aria-label="Switch team" hidden></select>
+      </span>
+    </div>
+
+    <nav class="tabs" role="tablist" aria-label="Coaching tools">
+      <button class="tab" role="tab" data-tab="lineup" aria-selected="true"><span class="dot"></span>Roster &amp; Lineup</button>
+      <button class="tab" role="tab" data-tab="practice" aria-selected="false"><span class="dot"></span>Practice</button>
+      <button class="tab" role="tab" data-tab="drills" aria-selected="false"><span class="dot"></span>Drill Library</button>
+      <button class="tab" role="tab" data-tab="game" aria-selected="false"><span class="dot"></span>Game Day</button>
+      <button class="tab" role="tab" data-tab="rules" aria-selected="false"><span class="dot"></span>Rules</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- ===================== LINEUP ===================== -->
+    <section class="panel active" id="p-lineup" role="tabpanel">
+      <div class="grid2">
+        <div class="card">
+          <h2><span class="num">1</span>Team roster</h2>
+          <p class="lead">Your team is built in — it loads on every device that opens this link. Tap <b>IN / OUT</b> to mark who showed up before you build the lineup. Add or remove players anytime; changes save on this device.</p>
+          <div class="row no-print" style="margin-bottom:12px">
+            <div style="flex:3 1 160px">
+              <label class="fld" for="teamName">Team name</label>
+              <input type="text" id="teamName" placeholder="e.g. Thunder" autocomplete="off">
+            </div>
+            <button class="btn ghost" id="copyLink" data-act="copy-link" style="flex:0 0 auto" hidden>🔗 Copy team link</button>
+          </div>
+          <div class="row no-print" style="margin-bottom:12px">
+            <div style="flex:3 1 160px">
+              <label class="fld" for="seasonName">Season</label>
+              <input type="text" id="seasonName" placeholder="e.g. Fall 2026" autocomplete="off">
+            </div>
+            <button class="btn ghost" data-act="new-season" style="flex:0 0 auto" title="Reset the fairness ledgers; games stay in the archive">Start new season</button>
+          </div>
+          <div class="row no-print" style="margin-bottom:12px">
+            <div style="flex:3 1 160px">
+              <label class="fld" for="newName">Add player</label>
+              <input type="text" id="newName" placeholder="First name" autocomplete="off">
+            </div>
+            <button class="btn" data-act="add-player" style="flex:0 0 auto">Add</button>
+          </div>
+          <ul class="roster" id="rosterList"></ul>
+          <div class="hint" id="presentCount" style="margin-top:10px"></div>
+        </div>
+
+        <div class="card">
+          <h2><span class="num">2</span>Build the lineup</h2>
+          <p class="lead">Rotates every player through the field so bench time is shared evenly across the game.</p>
+          <div class="row">
+            <div>
+              <label class="fld" for="format">Format</label>
+              <select id="format"><option value="u8" selected>U8 · keeper</option><option value="bu5">BU5 · no keeper</option></select>
+            </div>
+            <div>
+              <label class="fld" for="periods">Periods</label>
+              <select id="periods"><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option></select>
+            </div>
+            <div>
+              <label class="fld" for="onfield">On field</label>
+              <select id="onfield"><option>3</option><option>4</option><option>5</option><option selected>6</option><option>7</option></select>
+            </div>
+            <div>
+              <label class="fld" for="minsper">Min / period</label>
+              <input type="number" id="minsper" value="10" min="4" max="20">
+            </div>
+          </div>
+          <div class="hint" style="margin-top:8px" id="fmtHint"></div>
+          <div class="row no-print" style="margin-top:14px">
+            <button class="btn" data-act="build-lineup">Build lineup</button>
+            <button class="btn ghost" data-act="reshuffle" style="flex:0 0 auto">↻ Reshuffle</button>
+            <button class="btn ghost no-print" data-act="print-lineup" style="flex:0 0 auto">🖨 Print</button>
+          </div>
+          <hr class="divide">
+          <div id="lineupOut">
+            <div class="empty">Mark who's present, then <b>Build lineup</b> to see the rotation sheet.</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2><span class="num">✓</span>Before kickoff</h2>
+          <p class="lead">Walk the line once. Takes a minute and it is the part nobody remembers.</p>
+          <ul class="check">
+            <li><label><input type="checkbox"><span>Shin guards on, <b>under</b> the socks</span></label></li>
+            <li><label><input type="checkbox"><span>All jewellery and watches <b>removed</b> — taping over is not allowed</span></label></li>
+            <li><label><input type="checkbox"><span>Cleats on, laces tied</span></label></li>
+            <li><label><input type="checkbox"><span>Size 3 ball, pumped</span></label></li>
+            <li><label><input type="checkbox"><span>Water for everyone — extra on a hot day, both teams on the shady side</span></label></li>
+            <li><label><input type="checkbox"><span>Warm-up done <b>before</b> the start time, not after it</span></label></li>
+            <li id="ckRef"><label><input type="checkbox"><span>Referee present — <b>no ref means no goalkeeper</b> this match</span></label></li>
+            <li><label><input type="checkbox"><span>Parents briefed: cheer, don't coach; one sideline spot, a yard back</span></label></li>
+            <li><label><input type="checkbox"><span>Kickoff: visitors take the first half, home takes the second</span></label></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== PRACTICE ===================== -->
+    <section class="panel" id="p-practice" role="tabpanel">
+      <div class="card">
+        <h2><span class="num">3</span>Practice plan</h2>
+        <p class="lead">Keep it short and busy — 60 minutes, as many touches per kid as you can fit, minimal standing in line. Add drills from the <b>Drill Library</b>, set the minutes, drag the order with the arrows.</p>
+        <div class="row no-print" style="margin-bottom:6px">
+          <button class="btn ghost" data-act="template-practice" style="flex:0 0 auto">✨ Suggest a 60-min plan</button>
+          <button class="btn ghost" data-act="clear-practice" style="flex:0 0 auto">Clear</button>
+          <button class="btn ghost no-print" data-act="print-practice" style="flex:0 0 auto">🖨 Print</button>
+        </div>
+        <ol class="plan" id="planList"></ol>
+        <div id="planEmpty" class="empty" style="display:none">No drills yet. Hit <b>Suggest a 60-min plan</b>, or add drills from the library.</div>
+        <div class="plan-total">
+          <span class="hint">Total session length</span>
+          <span><span class="big tnum" id="planTotal">0</span> <span class="hint">min</span></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== DRILLS ===================== -->
+    <section class="panel" id="p-drills" role="tabpanel">
+      <div class="card" style="padding-bottom:8px">
+        <h2><span class="num">4</span>Drill library</h2>
+        <p class="lead">Age-appropriate drills for 6–7 year olds. Every one keeps kids touching the ball. Filter by what you want to work on, then <b>+ Add</b> to your practice plan.</p>
+        <div class="filters" id="filters"></div>
+        <div class="diag-key">
+          <span><i class="us"></i> player</span>
+          <span><i class="cone"></i> cone</span>
+          <span><i></i> run</span>
+          <span><i class="pass"></i> pass</span>
+          <span><i class="drib"></i> dribble</span>
+        </div>
+      </div>
+      <div class="drillgrid" id="drillGrid"></div>
+    </section>
+
+    <!-- ===================== GAME DAY ===================== -->
+    <section class="panel" id="p-game" role="tabpanel">
+      <div class="gd-grid">
+        <div>
+          <div class="scoreboard">
+            <div class="sb-top">
+              <span>Game Day</span>
+              <span class="period-pill" id="periodPill">Period 1</span>
+            </div>
+            <div class="clock-big tnum" id="clock">10:00</div>
+            <div class="clock-note" id="clockNote" hidden>⏸ CLOCK STOPPED — tap Start</div>
+            <div class="ends tnum" id="endsAt"></div>
+            <div class="score">
+              <div class="team">
+                <div class="nm" id="usName">Comets</div>
+                <div class="val tnum" id="usScore">0</div>
+                <div class="sc-btns"><button data-act="score" data-side="us" data-d="-1">−</button><button data-act="score" data-side="us" data-d="1">+</button></div>
+              </div>
+              <div class="colon">:</div>
+              <div class="team">
+                <div class="nm">Visitors</div>
+                <div class="val tnum" id="themScore">0</div>
+                <div class="sc-btns"><button data-act="score" data-side="them" data-d="-1">−</button><button data-act="score" data-side="them" data-d="1">+</button></div>
+              </div>
+            </div>
+            <div class="gd-controls">
+              <button class="btn btn-start" data-act="timer-toggle" id="timerBtn">▶ Start</button>
+              <button class="btn btn-reset" data-act="period-next">Period +</button>
+              <button class="btn btn-reset" data-act="timer-reset">Reset</button>
+            </div>
+          </div>
+          <div class="bench-note" id="benchNote"></div>
+          <div class="nudge" id="blowoutNudge" hidden></div>
+        </div>
+
+        <div>
+          <div class="field-mini">
+            <h3>On the field <span id="ofPeriod" style="opacity:.7;font-size:11px"></span></h3>
+            <div class="onfield" id="onFieldChips"><span class="hint" style="color:rgba(255,255,255,.7)">Build a lineup first to see who's on.</span></div>
+            <div class="subline" id="subLine"></div>
+          </div>
+
+          <div class="card no-print" id="gkCard" style="margin-top:16px" hidden>
+            <h2><span class="num">🧤</span>Keeper swap</h2>
+            <p class="lead">Swap who's in goal without anyone leaving the field. Time in goal is credited to the minute, so the one-period cap stays honest.</p>
+            <div class="row">
+              <div><label class="fld" for="gkSel">New keeper</label><select id="gkSel"></select></div>
+              <button class="btn" data-act="gk-swap" style="flex:0 0 auto">Make keeper</button>
+            </div>
+          </div>
+
+          <div class="card no-print subnow" id="subNow" style="margin-top:16px" hidden>
+            <h2><span class="num">⇄</span>Sub now</h2>
+            <p class="lead">Injury, safety, or any swap that isn't on the sheet. The rest of this period gets credited to whoever comes on, so the season totals stay honest.</p>
+            <div class="row">
+              <div><label class="fld" for="subOut">Coming off</label><select id="subOut"></select></div>
+              <div><label class="fld" for="subIn">Going on</label><select id="subIn"></select></div>
+              <button class="btn" data-act="sub-now" style="flex:0 0 auto">Swap</button>
+            </div>
+          </div>
+
+          <div class="card no-print" id="logCard" style="margin-top:16px" hidden>
+            <h2><span class="num">☰</span>Game log</h2>
+            <p class="lead">This season's games, straight from the archive. Tap one for its goals, subs and clock events.</p>
+            <div id="seasonLog"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== RULES ===================== -->
+    <section class="panel" id="p-rules" role="tabpanel">
+      <div class="card rules" id="bu5Rules" hidden>
+        <h2><span class="num">5</span>Rules &amp; conduct — BU5</h2>
+        <p class="lead">The short card for the BU5 side. ⚠ Region 630's BU5 specifics are not in the U8 guide — confirm periods, players on the field and period length before the first game.</p>
+        <h3>The format</h3>
+        <ul>
+          <li><b>No goalkeepers.</b> Nobody handles the ball.</li>
+          <li>Small-sided, size 3 ball. Shin guards under the socks, no jewellery.</li>
+          <li><b>Everyone plays</b> — the builder shares time evenly, same as U8.</li>
+        </ul>
+        <h3>Coaching</h3>
+        <ul>
+          <li>They are four and five: fun first, one instruction at a time, water often.</li>
+          <li>Cheer, don't criticise. Parents: one voice, a yard back from the line.</li>
+        </ul>
+      </div>
+      <div class="card rules" id="u8Rules">
+        <h2><span class="num">5</span>Rules &amp; conduct</h2>
+        <p class="lead">The reference half of the Region 630 U8 guide — the parts the app does not do for you. Nothing here has settings; it is here so you can check it on a Saturday morning.</p>
+
+        <h3>In play</h3>
+        <ul>
+          <li>Goalkeeper may <b>not punt</b>. Roll or throw it out, or place it down and play it with the feet.</li>
+          <li>Once the keeper places the ball on the ground, they <b>may not pick it up again</b>.</li>
+          <li>Hands only inside the box — outside it the keeper is an ordinary player.</li>
+          <li>Throw-in: both hands, ball starts behind the head, both feet stay on the ground. Coach the technique, don't just re-take it.</li>
+          <li>Corner kicks: opponents stay <b>5 yards</b> back.</li>
+          <li>Goal kicks: opponents retreat to the halfway line.</li>
+          <li>Every player keeps for a quarter, <b>maximum one quarter each</b>.</li>
+          <li>No referee for the match ⇒ <b>no goalkeeper</b> for that match.</li>
+        </ul>
+
+        <h3>Playing time</h3>
+        <ul>
+          <li>Everyone plays at least <b>3 of 4 quarters</b> before anyone plays a 4th.</li>
+          <li>One player may sit 2 quarters in a game — <b>rotate that responsibility</b> across games. The lineup builder now tracks this for you.</li>
+          <li>Safety and injury substitutions are allowed at any time, and the player may return in the same quarter.</li>
+        </ul>
+
+        <h3>Timing</h3>
+        <ul>
+          <li>Two 20-minute halves, played as four 10-minute quarters.</li>
+          <li>Substitution break mid-half: <b>2–3 minutes</b>.</li>
+          <li>Halftime: <b>5 minutes</b>, 10 on a hot day.</li>
+          <li>Start on time. Warm up before the start time, not into it.</li>
+        </ul>
+
+        <h3>Coaching on game day</h3>
+        <ul>
+          <li>Stay on the sideline. Not behind the goals.</li>
+          <li>Do not run onto the field.</li>
+          <li>Teach; don't criticise. They are seven.</li>
+          <li>If one team is running away with it (say 5–0), reduce the dominant team's players on the field. Game Day will nudge you.</li>
+        </ul>
+
+        <h3>Parents</h3>
+        <ul>
+          <li>Hold a pre-season meeting and share the AYSO behaviour guidelines.</li>
+          <li>Cheer, don't coach — the kids can only follow one voice.</li>
+          <li>Pick one sideline spot and stay about a yard back from the line.</li>
+        </ul>
+
+        <h3>Referees</h3>
+        <ul>
+          <li>Each team supplies <b>5 centre referees in Fall</b>, 4 in Spring.</li>
+          <li>8U referee training is required for all coaches and team referees.</li>
+        </ul>
+
+        <h3>Equipment</h3>
+        <ul>
+          <li>Shin guards, worn under the socks. Cleats. Size 3 ball.</li>
+          <li>No jewellery or watches — removed, not taped over.</li>
+        </ul>
+
+        <h3>Field</h3>
+        <ul>
+          <li>6v6 with keeper.</li>
+          <li>Goals 12 × 6, field 50 × 40, <span class="hint">as written in the guide. The units are almost certainly <b>yards</b> — 50 feet would be shorter than a six-yard box. Worth confirming with Region 630.</span></li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <p class="foot-note">
+    <b>Everyone Plays.</b> <span id="ruleNote"></span><br>
+    <span id="fmtNote"></span> Auto-saves as you go.
+  </p>
+</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="/drills.js"></script>
+<script src="/diagram.js"></script>
+<script src="/lineup-core.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

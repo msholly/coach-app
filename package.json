@@ -1,0 +1,18 @@
+{
+  "name": "coach-sideline",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "U8 AYSO coaching app — Cloudflare Worker + D1 (local-first sync)",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:create": "wrangler d1 create coach-sideline-db",
+    "db:init": "wrangler d1 execute coach-sideline-db --remote --file=./schema.sql",
+    "db:init:local": "wrangler d1 execute coach-sideline-db --local --file=./schema.sql",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}
