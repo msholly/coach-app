@@ -9,10 +9,11 @@ function makeDb() {
   const games = new Map(), events = new Map(), appearances = new Map();
   function exec(sql, a) {
     if (sql.startsWith("INSERT INTO games")) {
-      const [id, team_id, season, format, started_at, ended_at, opponent, us, them, periods, onfield, minsper] = a;
+      // Positional — this list must stay in step with postGame's bind() order.
+      const [id, team_id, season, format, started_at, ended_at, opponent, venue, us, them, periods, onfield, minsper] = a;
       const ex = games.get(id);
-      if (ex) { if (ex.team_id === team_id) Object.assign(ex, { season, ended_at, opponent, us, them }); }
-      else games.set(id, { id, team_id, season, format, started_at, ended_at, opponent, us, them, periods, onfield, minsper });
+      if (ex) { if (ex.team_id === team_id) Object.assign(ex, { season, ended_at, opponent, venue, us, them }); }
+      else games.set(id, { id, team_id, season, format, started_at, ended_at, opponent, venue, us, them, periods, onfield, minsper });
     } else if (sql.includes("INTO game_events")) {
       const [id, game_id, at, period, secs, kind, player_id, detail, gid, team] = a;
       const g = games.get(gid);
@@ -91,6 +92,23 @@ test("game row: kickoff insert, full-time upsert", async () => {
   const list = (await r.json()).games;
   assert.equal(list.length, 1);
   assert.equal(list[0].id, "game0001");
+});
+
+test("game row: venue is home/away or NULL, never anything else", async () => {
+  const db = makeDb(), env = { DB: db };
+  await worker.fetch(req(`/api/team/${TEAM}/games`, gameRow({ venue: "away" })), env);
+  assert.equal(db._games.get("game0001").venue, "away");
+
+  // an upsert carries the change through — a coach can correct it mid-game
+  await worker.fetch(req(`/api/team/${TEAM}/games`, gameRow({ venue: "home" })), env);
+  assert.equal(db._games.get("game0001").venue, "home");
+
+  // Junk and omission both land as NULL. "Not recorded" must stay distinct from
+  // "home", or every row written before the column existed reads as a home game.
+  await worker.fetch(req(`/api/team/${TEAM}/games`, gameRow({ id: "game0002", started_at: 2000, venue: "HOME" })), env);
+  assert.equal(db._games.get("game0002").venue, null);
+  await worker.fetch(req(`/api/team/${TEAM}/games`, gameRow({ id: "game0003", started_at: 3000 })), env);
+  assert.equal(db._games.get("game0003").venue, null);
 });
 
 test("a game row can't be hijacked by another team's token", async () => {

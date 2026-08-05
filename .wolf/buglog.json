@@ -64,6 +64,1615 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-08-04T03:37:52.346Z"
+    },
+    {
+      "id": "bug-046",
+      "timestamp": "2026-08-04T19:05:00.000Z",
+      "error_message": "New .btn-reset (outline style, next to Start) rendered solid green — identical to the Start button it must not be confused with",
+      "file": "public/app.css",
+      "root_cause": "app.css styles the base button as `button.btn` (specificity 0-1-1). A single-class override `.btn-reset` (0-1-0) loses to it, so background/border stayed --accent.",
+      "fix": "Wrote the override as `button.btn.btn-reset` (0-2-1). Any new .btn variant in this file needs the element+two-class form, not a bare class.",
+      "tags": [
+        "css",
+        "specificity",
+        "game-day",
+        "button"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T19:05:00.000Z"
+    },
+    {
+      "id": "bug-047",
+      "timestamp": "2026-08-04T19:12:00.000Z",
+      "error_message": "Go Live button label broke into a jumbled 2-line grid on mobile — score rendered as \"0-\" / \"0\" beside the text",
+      "file": "public/app.js",
+      "root_cause": "button.btn is display:flex;gap:7px, so every child element becomes a flex item. renderGoLive() emitted a bare <b> among text nodes and flex spread them into separate columns.",
+      "fix": "Wrapped the whole label in one <span> (icon span + label span only). Any innerHTML written into a .btn must be a single element, not mixed text + inline tags.",
+      "tags": [
+        "css",
+        "flexbox",
+        "roster",
+        "button",
+        "innerHTML"
+      ],
+      "related_bugs": [
+        "bug-046"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T19:12:00.000Z"
+    },
+    {
+      "id": "bug-048",
+      "timestamp": "2026-08-04T19:40:00.000Z",
+      "error_message": "User: \"Recent actions is not updating as expected. I have to tap in or near the Recent Actions section to force a refresh\"",
+      "file": "public/app.js",
+      "root_cause": "renderFixCard() is only called from renderGame() and the fix-open click handler. scoreChange() and sogTap() call logEvent() (which pushes onto state.game.recent) but then render only renderNudge()/renderOnField(), so the Fix-a-mistake list kept the previous render's markup until an unrelated tap re-ran it.",
+      "fix": "Added renderFixCard() to scoreChange() and sogTap(). Rule: any path that calls logEvent() with an undoable kind and does not go through renderGame() must render the fix card itself.",
+      "tags": [
+        "game-day",
+        "fix-a-mistake",
+        "render",
+        "stale-ui",
+        "missing-render-call"
+      ],
+      "related_bugs": [
+        "bug-049"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T19:40:00.000Z"
+    },
+    {
+      "id": "bug-049",
+      "timestamp": "2026-08-04T19:44:00.000Z",
+      "error_message": "User: \"Shots on goal is not appearing on Recent Actions\"",
+      "file": "public/app.js",
+      "root_cause": "Two causes. (1) \"sog\" was deliberately excluded from logEvent's undoable list (commented \"informational only - no undo plumbing\"), so it never reached g.recent. (2) sogTap logged logEvent(\"sog\",{},id) - the player id went to the archive row's player_id column but not into detail, and g.recent mirrors detail only, so even once listed it had no id to undo against.",
+      "fix": "Added \"sog\" to the undoable kinds, changed the call to logEvent(\"sog\",{playerId:id},id), and added fixLabel/fixConseq/undoFix branches that decrement playerStats[id].sog and log the correction. Verified headless: shot count 1 -> 0 from the Recent actions Undo.",
+      "tags": [
+        "game-day",
+        "fix-a-mistake",
+        "sog",
+        "player-stats",
+        "undo"
+      ],
+      "related_bugs": [
+        "bug-048"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T19:44:00.000Z"
+    },
+    {
+      "id": "bug-050",
+      "timestamp": "2026-08-04T19:20:00.000Z",
+      "error_message": "Undoing a player's goal left their season goal tally too high — the correcting archive row had player_id NULL, so no per-player aggregate could ever net it out",
+      "file": "public/app.js",
+      "root_cause": "undoFix() called scoreChange(d.side,-1) without the third argument, so logEvent wrote the correcting goal row with player_id NULL and detail.playerId null. The team score was right (games table) but SUM(detail.d) GROUP BY player_id could not see the -1.",
+      "fix": "undoFix now calls scoreChange(d.side,-1,d.playerId). scoreChange only credits playerStats when d>0, so this cannot double-decrement. Verified in D1: the correcting row is {side:us,d:-1,playerId:seed1} with player_id=seed1, and the season leader nets to 2 after 3 goals and 1 undo.",
+      "tags": [
+        "archive",
+        "d1",
+        "undo",
+        "stats",
+        "null-player-id"
+      ],
+      "related_bugs": [
+        "bug-049"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T19:20:00.000Z"
+    },
+    {
+      "id": "bug-051",
+      "timestamp": "2026-08-04T19:25:00.000Z",
+      "error_message": ".wolf/buglog.json lost entries bug-005..bug-045 — the file came back holding only 4 entries, with mojibake and renumbered ids, after being rewritten",
+      "file": ".wolf/buglog.json",
+      "root_cause": "The agent rewrote buglog.json with PowerShell `ConvertTo-Json | Out-File -Encoding utf8`. Windows PowerShell 5.1 writes a UTF-8 BOM (EF BB BF) there. The OpenWolf hook reads the file with JSON.parse, which throws on a leading BOM, so the hook reinitialised the log and began renumbering from bug-001 — discarding the auto-logged working-tree entries, which were never committed and are unrecoverable from git.",
+      "fix": "Restored the 4 committed entries via `git show HEAD:.wolf/buglog.json` plus the substantive entries still held in session context (bug-046..051); bug-005..045 (machine-generated hook noise) are lost. Rule: only edit .wolf/*.json with the Write/Edit tools, which write UTF-8 with no BOM. Never Out-File / Set-Content a file another tool parses as JSON.",
+      "tags": [
+        "powershell",
+        "bom",
+        "encoding",
+        "data-loss",
+        "openwolf",
+        "tooling"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T19:25:00.000Z"
+    },
+    {
+      "id": "bug-055",
+      "timestamp": "2026-08-04T20:30:00.000Z",
+      "error_message": "Practice burn-down reported \"12 min behind\" for a coach who was simply 12 minutes into the first (8 min) drill — only 4 minutes of that was real lateness",
+      "file": "public/app.js",
+      "root_cause": "behind was computed as elapsed - plannedStart(idx), i.e. elapsed time minus the clock position where the CURRENT drill was due to start. At idx 0 plannedStart is 0, so the figure was just the elapsed time. It credited no progress for time spent inside the drill actually running.",
+      "fix": "Added workDone(): finished drills count in full, the running drill counts only up to its planned length. behind = min(elapsed,total) - workDone(), with a separate elapsed-total case once every drill is done. Verified: 12 min elapsed on an 8-min opening drill now reads '4 min behind'; two quick advances read '4 min ahead'.",
+      "tags": [
+        "practice",
+        "burn-down",
+        "math",
+        "scheduling"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T20:30:00.000Z"
+    },
+    {
+      "id": "bug-056",
+      "timestamp": "2026-08-04T21:15:00.000Z",
+      "error_message": "A goal logged during a sync push never reached the archive — the season leaderboard showed the scorer on 0 while the client and the scoreboard both said 1. Its event id survived only as the ofEvent reference on a later correction row.",
+      "file": "public/app.js",
+      "root_cause": "flushOutbox() loaded the outbox once into `ob`, then awaited each POST and wrote `saveOutbox(ob)` afterwards. logEvent() writes to the same KEY:outbox localStorage key, so any event appended while a request was in flight was clobbered when the stale snapshot was saved back. The events loop also spliced by index rather than by id, so a concurrent unshift/push shifted the wrong rows out. Pre-existing; the goal sheet just fires several events in quick succession and made it easy to hit.",
+      "fix": "flushOutbox() now re-reads the outbox after every await and clears rows by id (events) or by key (games/appearances) instead of by position. Verified: the same scripted sequence that lost a goal now lands all events, and GET /stats matches the client's playerStats exactly.",
+      "tags": [
+        "sync",
+        "outbox",
+        "race",
+        "lost-write",
+        "archive",
+        "localstorage"
+      ],
+      "related_bugs": [
+        "bug-050"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T21:15:00.000Z"
+    },
+    {
+      "id": "bug-057",
+      "timestamp": "2026-08-04T22:05:00.000Z",
+      "error_message": "User: \"The toast text is default Times New Roman.\"",
+      "file": "public/app.css",
+      "root_cause": "The app font stack is declared on .wrap, not on body or :root. #toast/.toaststack is a sibling of .wrap (a direct child of body) so it inherits nothing and falls back to the UA serif default. .lockscreen had already hit this and carries its own font-family; .toaststack never did.",
+      "fix": "Restated font-family:system-ui,... on .toaststack (with the same comment .lockscreen carries). Verified computed style is 'system-ui, \"Segoe UI\", Roboto, -apple-system, Helvetica, Arial, sans-serif'. Anything else rendered outside .wrap needs the same treatment — better still, move the stack to body/:root one day.",
+      "tags": [
+        "css",
+        "font",
+        "inheritance",
+        "toast",
+        "outside-wrap"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T22:05:00.000Z"
+    },
+    {
+      "id": "bug-058",
+      "timestamp": "2026-08-04T23:10:00.000Z",
+      "error_message": "User: \"The browser alert() pauses the web page, so replace with a custom modal.\" — every confirm()/prompt() froze the running game clock while it was on screen",
+      "file": "public/app.js",
+      "root_cause": "14 call sites used the synchronous window.confirm()/prompt(). Those spin the UA's own event loop: rendering stops, setInterval callbacks do not fire, so the period clock neither repaints nor ticks for as long as the dialog is up — on the one screen whose whole job is a running clock.",
+      "fix": "Added ask({title,body,ok,cancel,danger,input}) backed by a <dialog id=askDialog>, returning a Promise (true/false, or string/null for text). Converted all 14 sites; functions that gated on a confirm were split into ask + do* halves, and buildLineup's question moved to the click handler so it could stay synchronous. Verified: the clock advances 9:59 -> 9:56 while the modal is open, and puppeteer sees zero native dialogs across the whole flow.",
+      "tags": [
+        "ux",
+        "modal",
+        "blocking",
+        "confirm",
+        "game-clock",
+        "async"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T23:10:00.000Z"
+    },
+    {
+      "id": "bug-059",
+      "timestamp": "2026-08-04T23:20:00.000Z",
+      "error_message": "User: \"The Bench row background is black with the rest of the roster now\"",
+      "file": "public/app.css",
+      "root_cause": "#benchNote sat outside .field-mini, on the page background. Its chips use --surface-2 (#232a20 in dark mode) against a --bg of #131711, so the bench read as a black block continuous with the page rather than as part of the squad panel.",
+      "fix": "Moved #benchNote inside .field-mini above #subLine (which also swaps the Bench and Next-subs order as asked) and gave the chips a dark-panel palette: rgba(255,255,255,.08) fill, rgba(255,255,255,.22) border, white text. Verified against the panel's rgb(13,16,11) background.",
+      "tags": [
+        "css",
+        "contrast",
+        "game-day",
+        "bench",
+        "layout"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T23:20:00.000Z"
+    },
+    {
+      "id": "bug-060",
+      "timestamp": "2026-08-05T00:30:00.000Z",
+      "error_message": "The bottom item of the FAB nav menu could not be tapped — elementFromPoint at its centre returned DIV.toast, not the button. Found while verifying the full-width nav; the Game Day item had just been moved into that slot.",
+      "file": "public/app.css",
+      "root_cause": ".toaststack is z-index 50 and .fabnav was z-index 40, and the stack (centred, min(94vw,440px)) is wide enough to overlap the menu at left:16px. Each .toast sets pointer-events:auto, so a toast still on screen painted over the lowest menu row and swallowed the tap. Pre-existing — the narrower max-content menu had the same overlap, it just had Rules in that slot instead of the most important route.",
+      "fix": "Raised .fabnav to z-index 60 so the nav always paints above the toast stack. Verified with elementFromPoint on all six items: every one now returns its own BUTTON.tab. Second instance of the class of bug already in Do-Not-Repeat (an invisible/overlapping element eating nav clicks) — when a nav control does nothing, hit-test before suspecting the handler.",
+      "tags": [
+        "css",
+        "z-index",
+        "hit-testing",
+        "fabnav",
+        "toast",
+        "regression-risk"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-05T00:30:00.000Z"
+    },
+    {
+      "id": "bug-052",
+      "timestamp": "2026-08-04T19:19:43.821Z",
+      "error_message": "Missing await",
+      "file": "src/worker.js",
+      "root_cause": "Async call without await — returned Promise instead of value",
+      "fix": "Added await to async call",
+      "tags": [
+        "auto-detected",
+        "async-fix",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T19:19:43.821Z"
+    },
+    {
+      "id": "bug-053",
+      "timestamp": "2026-08-04T19:20:14.285Z",
+      "error_message": "Missing guard clause",
+      "file": "public/app.js",
+      "root_cause": "No early return/throw for edge case: !BACKEND||!TEAM",
+      "fix": "Added guard clause: if (!BACKEND||!TEAM)",
+      "tags": [
+        "auto-detected",
+        "guard-clause",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T19:20:14.285Z"
+    },
+    {
+      "id": "bug-054",
+      "timestamp": "2026-08-04T19:21:53.839Z",
+      "error_message": "Incorrect value in code",
+      "file": "public/app.js",
+      "root_cause": "Had \"Score correction (\"",
+      "fix": "Changed to \"'s goal removed\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T19:21:53.839Z"
+    },
+    {
+      "id": "bug-014",
+      "timestamp": "2026-08-04T19:29:37.679Z",
+      "error_message": "CSS fix: background",
+      "file": "public/app.css",
+      "root_cause": "background: var(--cone) → var(--accent)",
+      "fix": "Changed background: var(--cone) → var(--accent)",
+      "tags": [
+        "auto-detected",
+        "style-fix",
+        "css"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-08-04T19:30:00.834Z"
+    },
+    {
+      "id": "bug-015",
+      "timestamp": "2026-08-04T19:30:55.480Z",
+      "error_message": "Missing guard clause",
+      "file": "public/app.js",
+      "root_cause": "No early return/throw for edge case: !box",
+      "fix": "Added guard clause: if (!box)",
+      "tags": [
+        "auto-detected",
+        "guard-clause",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T19:30:55.480Z"
+    },
+    {
+      "id": "bug-016",
+      "timestamp": "2026-08-04T19:31:02.405Z",
+      "error_message": "Wrong condition in logic",
+      "file": "public/app.js",
+      "root_cause": "Condition was: if (act===\"template-practice\")",
+      "fix": "Changed to: if (act===\"practice-start\")",
+      "tags": [
+        "auto-detected",
+        "logic-fix",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T19:31:02.405Z"
+    },
+    {
+      "id": "bug-017",
+      "timestamp": "2026-08-04T19:31:47.540Z",
+      "error_message": "Missing error handling in activeTab",
+      "file": "public/app.js",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T19:31:47.540Z"
+    },
+    {
+      "id": "bug-018",
+      "timestamp": "2026-08-04T19:33:45.133Z",
+      "error_message": "Significant refactor of ",
+      "file": "public/app.js",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 4→4 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T19:33:45.133Z"
+    },
+    {
+      "id": "bug-019",
+      "timestamp": "2026-08-04T19:33:49.597Z",
+      "error_message": "Wrong reference: plannedStart should be banked",
+      "file": "public/app.js",
+      "root_cause": "Used \"plannedStart\" instead of \"banked\"",
+      "fix": "Changed plannedStart → banked",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T19:33:49.597Z"
+    },
+    {
+      "id": "bug-020",
+      "timestamp": "2026-08-04T19:33:56.021Z",
+      "error_message": "Incorrect value in code",
+      "file": "public/app.js",
+      "root_cause": "Had '+Y(total-plannedStart(idx))+'",
+      "fix": "Changed to '+Y(total-banked)+'",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T19:33:56.021Z"
+    },
+    {
+      "id": "bug-022",
+      "timestamp": "2026-08-04T19:41:34.274Z",
+      "error_message": "Wrong reference: dialog should be class",
+      "file": "public/index.html",
+      "root_cause": "Used \"dialog\" instead of \"class\"",
+      "fix": "Changed dialog → class",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "html"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T19:41:34.274Z"
+    },
+    {
+      "id": "bug-023",
+      "timestamp": "2026-08-04T19:41:46.956Z",
+      "error_message": "Wrong reference: clkDialog should be sheet",
+      "file": "public/app.css",
+      "root_cause": "Used \"clkDialog\" instead of \"sheet\"",
+      "fix": "Changed clkDialog → sheet",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "css"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T19:41:46.956Z"
+    },
+    {
+      "id": "bug-024",
+      "timestamp": "2026-08-04T19:42:06.276Z",
+      "error_message": "Significant refactor of ",
+      "file": "public/app.js",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 9→12 lines (2 removed) | Also: var r=by[ev.player_id]=by[ev.player_id]||{goals:0,; if(ev.kind===\"goal\") r.goals+=(+d.d||0); else r.sh | Also: var ob=loadOutbox(), base=\"/api/team/\"+encodeURICo; // Game rows first: events and appearances only ex",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 3,
+      "last_seen": "2026-08-04T19:47:29.122Z"
+    },
+    {
+      "id": "bug-025",
+      "timestamp": "2026-08-04T19:42:58.159Z",
+      "error_message": "Missing guard clause",
+      "file": "public/app.js",
+      "root_cause": "No early return/throw for edge case: ps.assists==null",
+      "fix": "Added guard clause: if (ps.assists==null)",
+      "tags": [
+        "auto-detected",
+        "guard-clause",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-08-04T19:44:10.799Z"
+    },
+    {
+      "id": "bug-026",
+      "timestamp": "2026-08-04T19:43:59.512Z",
+      "error_message": "Wrong condition in logic",
+      "file": "public/app.js",
+      "root_cause": "Condition was: if (ticker)",
+      "fix": "Changed to: if (!ticker)",
+      "tags": [
+        "auto-detected",
+        "logic-fix",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T19:43:59.512Z"
+    },
+    {
+      "id": "bug-027",
+      "timestamp": "2026-08-04T19:44:00.206Z",
+      "error_message": "Missing error handling in unknown",
+      "file": "public/app.js",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T19:44:00.206Z"
+    },
+    {
+      "id": "bug-028",
+      "timestamp": "2026-08-04T19:44:36.596Z",
+      "error_message": "Significant refactor of ",
+      "file": "src/worker.js",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 9→21 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T19:44:36.596Z"
+    },
+    {
+      "id": "bug-029",
+      "timestamp": "2026-08-04T19:45:23.610Z",
+      "error_message": "Significant refactor of ",
+      "file": "../AppData/Local/Temp/claude/c--Users-msholly-coach-app/f7fe113c-19fb-4309-a2ac-598056ac0cad/scratchpad/verify-lock.cjs",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 3→4 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "cjs"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T19:45:23.610Z"
+    },
+    {
+      "id": "bug-030",
+      "timestamp": "2026-08-04T20:10:00.000Z",
+      "error_message": "Period-end beep() never fires — the phone screen sleeps mid-period and the page stops running",
+      "file": "public/app.js",
+      "root_cause": "No screen wake lock anywhere in the app. The clock relied on the phone staying awake by itself; once iOS/Android sleeps the display the page is frozen and the alarm is silent.",
+      "fix": "Added keepAwake()/syncWake() around navigator.wakeLock, driven from startTicker/stopTicker and re-requested on visibilitychange (iOS silently drops the lock on backgrounding). Silent no-op where the API is absent.",
+      "tags": [
+        "wakelock",
+        "clock",
+        "alarm",
+        "ios",
+        "pwa"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T20:10:00.000Z"
+    },
+    {
+      "id": "bug-031",
+      "timestamp": "2026-08-04T20:10:00.000Z",
+      "error_message": "Pocket-lock overlay rendered in a serif font (headless screenshot)",
+      "file": "public/app.css",
+      "root_cause": ".lockscreen is a sibling of .wrap, not a descendant — the app font stack is declared on .wrap, so the overlay inherited the browser default.",
+      "fix": "Restated the system-ui font stack on .lockscreen. Same trap applies to any future element placed outside .wrap (e.g. .toaststack).",
+      "tags": [
+        "css",
+        "font",
+        "overlay",
+        "lockscreen"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T20:10:00.000Z"
+    },
+    {
+      "id": "bug-033",
+      "timestamp": "2026-08-04T19:58:17.473Z",
+      "error_message": "CSS fix: pointer-events",
+      "file": "public/app.css",
+      "root_cause": "pointer-events: none → auto",
+      "fix": "Changed pointer-events: none → auto",
+      "tags": [
+        "auto-detected",
+        "style-fix",
+        "css"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T19:58:17.473Z"
+    },
+    {
+      "id": "bug-034",
+      "timestamp": "2026-08-04T19:58:30.167Z",
+      "error_message": "Significant refactor of ",
+      "file": "public/app.js",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 11→32 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T19:58:30.167Z"
+    },
+    {
+      "id": "bug-035",
+      "timestamp": "2026-08-04T19:58:35.536Z",
+      "error_message": "Incorrect value in code",
+      "file": "public/app.js",
+      "root_cause": "Had \"go-live\"",
+      "fix": "Changed to \"toast-clear\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T19:58:35.536Z"
+    },
+    {
+      "id": "bug-037",
+      "timestamp": "2026-08-04T20:02:37.705Z",
+      "error_message": "Significant refactor of ",
+      "file": "public/app.css",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 5→7 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "css"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T20:02:37.705Z"
+    },
+    {
+      "id": "bug-038",
+      "timestamp": "2026-08-04T20:10:04.780Z",
+      "error_message": "Significant refactor of ",
+      "file": "public/app.js",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 16→22 lines (3 removed) | Also: var rows='<div class=\"sph\">Next subs — in priority; if(lu.keeper && pi+1<lu.Q){ | Also: note.innerHTML='<span class=\"bh\">Bench — least pla; +'<div class=\"rec\">↑ '+esc(nm(rec.id))+' has playe",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 3,
+      "last_seen": "2026-08-04T20:11:03.227Z"
+    },
+    {
+      "id": "bug-039",
+      "timestamp": "2026-08-04T20:10:25.036Z",
+      "error_message": "Incorrect value in code",
+      "file": "public/app.js",
+      "root_cause": "Had ')+r1(playedSoFar(lu,pi,id))+'",
+      "fix": "Changed to ')+r1(playedSoFar(lu,api,id))+'",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-08-04T20:11:23.035Z"
+    },
+    {
+      "id": "bug-040",
+      "timestamp": "2026-08-04T20:11:17.261Z",
+      "error_message": "CSS fix: font-size",
+      "file": "public/app.css",
+      "root_cause": "font-size: 13px → 14px",
+      "fix": "Changed font-size: 13px → 14px",
+      "tags": [
+        "auto-detected",
+        "style-fix",
+        "css"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T20:11:17.261Z"
+    },
+    {
+      "id": "bug-041",
+      "timestamp": "2026-08-04T20:11:31.150Z",
+      "error_message": "Missing guard clause",
+      "file": "public/app.js",
+      "root_cause": "No early return/throw for edge case: s<10",
+      "fix": "Added guard clause: if (s<10)",
+      "tags": [
+        "auto-detected",
+        "guard-clause",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T20:11:31.150Z"
+    },
+    {
+      "id": "bug-042",
+      "timestamp": "2026-08-04T20:16:37.896Z",
+      "error_message": "Incorrect value in code",
+      "file": "public/index.html",
+      "root_cause": "Had \"bench-note\"",
+      "fix": "Changed to \"row no-print\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "html"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T20:16:37.896Z"
+    },
+    {
+      "id": "bug-043",
+      "timestamp": "2026-08-04T20:16:55.603Z",
+      "error_message": "Null/undefined access in ",
+      "file": "public/app.js",
+      "root_cause": "Property access on potentially null/undefined value",
+      "fix": "Added null safety (optional chaining or null check)",
+      "tags": [
+        "auto-detected",
+        "null-safety",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T20:16:55.603Z"
+    },
+    {
+      "id": "bug-044",
+      "timestamp": "2026-08-04T20:17:01.775Z",
+      "error_message": "Incorrect value in code",
+      "file": "public/app.js",
+      "root_cause": "Had \"toast-clear\"",
+      "fix": "Changed to \"ask-yes\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-08-04T20:18:04.469Z"
+    },
+    {
+      "id": "bug-045",
+      "timestamp": "2026-08-04T20:17:10.008Z",
+      "error_message": "Function not marked async",
+      "file": "public/app.js",
+      "root_cause": "Function uses await but wasn't declared async",
+      "fix": "Added async modifier | Also: // Labelled buttons instead of OK/Cancel — nobody should hav; // which way round a yes/no maps onto losing a device's chan",
+      "tags": [
+        "auto-detected",
+        "async-fix",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-08-04T20:19:49.416Z"
+    },
+    {
+      "id": "bug-046",
+      "timestamp": "2026-08-04T20:17:23.601Z",
+      "error_message": "Missing guard clause",
+      "file": "public/app.js",
+      "root_cause": "No early return/throw for edge case: !ok",
+      "fix": "Added guard clause: if (!ok)",
+      "tags": [
+        "auto-detected",
+        "guard-clause",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 6,
+      "last_seen": "2026-08-04T20:19:15.876Z"
+    },
+    {
+      "id": "bug-047",
+      "timestamp": "2026-08-04T20:18:24.807Z",
+      "error_message": "Missing error handling in switchTeam",
+      "file": "public/app.js",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T20:18:24.807Z"
+    },
+    {
+      "id": "bug-048",
+      "timestamp": "2026-08-04T20:18:43.470Z",
+      "error_message": "Significant refactor of ",
+      "file": "public/app.js",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 4→9 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T20:18:43.470Z"
+    },
+    {
+      "id": "bug-049",
+      "timestamp": "2026-08-04T20:19:24.084Z",
+      "error_message": "Wrong condition in logic",
+      "file": "public/app.js",
+      "root_cause": "Condition was: if (!nm||!nm.trim()",
+      "fix": "Changed to: if (nm)",
+      "tags": [
+        "auto-detected",
+        "logic-fix",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T20:19:24.084Z"
+    },
+    {
+      "id": "bug-050",
+      "timestamp": "2026-08-04T20:20:05.727Z",
+      "error_message": "Wrong reference: keepMine should be dead",
+      "file": "public/app.js",
+      "root_cause": "Used \"keepMine\" instead of \"dead\"",
+      "fix": "Changed keepMine → dead",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T20:20:05.727Z"
+    },
+    {
+      "id": "bug-053",
+      "timestamp": "2026-08-04T20:24:49.764Z",
+      "error_message": "Significant refactor of ",
+      "file": "public/index.html",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 4→7 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "html"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T20:24:49.764Z"
+    },
+    {
+      "id": "bug-054",
+      "timestamp": "2026-08-04T20:24:59.748Z",
+      "error_message": "Incorrect value in code",
+      "file": "public/index.html",
+      "root_cause": "Had \"btn btn-reset no-print\"",
+      "fix": "Changed to \"btn btn-start\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "html"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T20:24:59.748Z"
+    },
+    {
+      "id": "bug-055",
+      "timestamp": "2026-08-04T20:26:03.757Z",
+      "error_message": "Significant refactor of ",
+      "file": "public/app.js",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 11→29 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T20:26:03.757Z"
+    },
+    {
+      "id": "bug-056",
+      "timestamp": "2026-08-04T20:27:03.510Z",
+      "error_message": "Incorrect value in code",
+      "file": "public/sw.js",
+      "root_cause": "Had \"sideline-shell-v4\"",
+      "fix": "Changed to \"sideline-shell-v5\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T20:27:03.510Z"
+    },
+    {
+      "id": "bug-057",
+      "timestamp": "2026-08-04T20:35:00.000Z",
+      "error_message": "Reset the clock mid-period silently inflates every later sub's playing-time credit, and can make credited time vanish from the ledger entirely",
+      "file": "public/app.js",
+      "root_cause": "Playing time is credited in periods, not minutes; the clock's only role in the ledger is the split fraction at a sub (editFrac = g.secs/(minsper*60)). resetTimer() put g.secs back to full without touching lu.app, so a later sub was credited against the reset clock — e.g. sub at 4:00 (frac 0.4), Reset, sub at 8:00 credits 0.8 against an entry with 0.4 left. applySub does act.frac -= frac, driving the entry negative, and the frac > 1e-9 filters in appearanceRows/positionTotals then drop it silently. resetTimer also cleared g.onBreak, killing a live break without advancing the period, and was the only clock change in the app that logged no event and could not be undone.",
+      "fix": "Added canReset() — false on a break, false when the clock is already full, and false once any entry in lu.app[curPi()] has frac < 1 (the signal that a sub, keeper swap or format switch has already split this period at the clock). Read off lu.app rather than g.recent because that list is capped at 8 and is spliced on undo. resetTimer() now guards on canReset() at entry and again after the confirm sheet resolves (the clock runs on while it is open), logs clock_set (already in logEvent's undoable set, and undoFix already restores detail.from), and no longer clears onBreak. The button moved from .gd-controls onto the clock row as .clock-tag.reset, mirroring the Edit tag; both tags are position:absolute, so hiding Reset shifts nothing. Credited playing time is never rewritten — the confirm copy was already accurate.",
+      "tags": [
+        "playing-time",
+        "ledger",
+        "clock",
+        "fairness",
+        "silent-data-loss",
+        "undo",
+        "game-day"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T20:35:00.000Z"
+    },
+    {
+      "id": "bug-058",
+      "timestamp": "2026-08-04T20:32:37.866Z",
+      "error_message": "Missing error handling in syncWake",
+      "file": "public/app.js",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T20:32:37.866Z"
+    },
+    {
+      "id": "bug-059",
+      "timestamp": "2026-08-04T20:33:03.626Z",
+      "error_message": "Significant refactor of ",
+      "file": "public/app.js",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 7→10 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T20:33:03.626Z"
+    },
+    {
+      "id": "bug-060",
+      "timestamp": "2026-08-04T20:34:08.923Z",
+      "error_message": "Incorrect value in code",
+      "file": "public/sw.js",
+      "root_cause": "Had \"sideline-shell-v5\"",
+      "fix": "Changed to \"sideline-shell-v6\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T20:34:08.923Z"
+    },
+    {
+      "id": "bug-032",
+      "timestamp": "2026-08-04T21:00:00.000Z",
+      "error_message": "Wrist alerts button never appeared / initAlerts saw TEAM as null",
+      "file": "public/app.js",
+      "root_cause": "app.js is one big IIFE; TEAM is only assigned inside boot(), which runs at the very bottom. Any top-level probe that reads TEAM sees the hoisted undefined and silently disables itself.",
+      "fix": "Wrapped the probe in initAlerts() and called it from boot() after initSync(). Rule: anything depending on TEAM/KEY/state must be called from boot(), never run at parse time.",
+      "tags": [
+        "app.js",
+        "boot-order",
+        "hoisting",
+        "push",
+        "TEAM"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T21:00:00.000Z"
+    },
+    {
+      "id": "bug-033",
+      "timestamp": "2026-08-04T21:00:00.000Z",
+      "error_message": "pushManager.subscribe() hangs forever in headless Chrome — no resolve, no reject",
+      "file": "scratchpad/verify-push.cjs",
+      "root_cause": "Headless Chrome needs a live FCM registration to mint a subscription. It succeeded once and then hung on every later attempt; nothing to do with app code.",
+      "fix": "Verify the client by stubbing PushManager.prototype.subscribe/getSubscription and asserting our own downstream behaviour (POST /push, alarm arm/cancel, button state). Drive the SW push handler separately with CDP ServiceWorker.deliverPushMessage, which needs no push service at all.",
+      "tags": [
+        "testing",
+        "puppeteer",
+        "push",
+        "headless",
+        "fcm"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T21:00:00.000Z"
+    },
+    {
+      "id": "bug-034",
+      "timestamp": "2026-08-04T21:00:00.000Z",
+      "error_message": "DO alarm test expected the dead subscription to be pruned; row stayed",
+      "file": "scratchpad (test assumption)",
+      "root_cause": "The test pointed at https://example.com/nope, which answers GET with 404 but POST with 405. The prune only fires on 404/410, so the code was right and the assertion was wrong.",
+      "fix": "Re-pointed at an endpoint that really returns 410 on POST. When asserting on an HTTP status, check the status for the METHOD under test, not the one curl defaults to.",
+      "tags": [
+        "testing",
+        "http",
+        "durable-objects",
+        "push"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T21:00:00.000Z"
+    },
+    {
+      "id": "bug-064",
+      "timestamp": "2026-08-04T20:45:38.465Z",
+      "error_message": "Incorrect value in code",
+      "file": "public/index.html",
+      "root_cause": "Had \"card no-print fixcard\"",
+      "fix": "Changed to \"card band no-print fixcard\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "html"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T20:45:38.465Z"
+    },
+    {
+      "id": "bug-065",
+      "timestamp": "2026-08-04T20:46:01.995Z",
+      "error_message": "CSS fix: padding",
+      "file": "public/app.css",
+      "root_cause": "padding: 3px 10px → 0 10px 1px",
+      "fix": "Changed padding: 3px 10px → 0 10px 1px",
+      "tags": [
+        "auto-detected",
+        "style-fix",
+        "css"
+      ],
+      "related_bugs": [],
+      "occurrences": 10,
+      "last_seen": "2026-08-04T20:54:06.659Z"
+    },
+    {
+      "id": "bug-066",
+      "timestamp": "2026-08-04T20:46:54.905Z",
+      "error_message": "Incorrect value in code",
+      "file": "public/app.js",
+      "root_cause": "Had '<span class=\"",
+      "fix": "Changed to '<div class=\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T20:46:54.905Z"
+    },
+    {
+      "id": "bug-068",
+      "timestamp": "2026-08-04T21:06:55.626Z",
+      "error_message": "Wrong reference: button should be div",
+      "file": "public/index.html",
+      "root_cause": "Used \"button\" instead of \"div\"",
+      "fix": "Changed button → div",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "html"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T21:06:55.626Z"
+    },
+    {
+      "id": "bug-069",
+      "timestamp": "2026-08-04T21:07:03.251Z",
+      "error_message": "CSS fix: margin, padding",
+      "file": "public/app.css",
+      "root_cause": "margin: 0 -16px 0 → 28px -16px 0; padding: 7px 16px → 14px 16px 0",
+      "fix": "Changed margin: 0 -16px 0 → 28px -16px 0; padding: 7px 16px → 14px 16px 0",
+      "tags": [
+        "auto-detected",
+        "style-fix",
+        "css"
+      ],
+      "related_bugs": [],
+      "occurrences": 4,
+      "last_seen": "2026-08-04T21:12:19.682Z"
+    },
+    {
+      "id": "bug-070",
+      "timestamp": "2026-08-04T21:08:15.274Z",
+      "error_message": "Significant refactor of ",
+      "file": "public/app.js",
+      "root_cause": "4 lines replaced/restructured",
+      "fix": "Rewrote 12→15 lines (4 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T21:08:15.274Z"
+    },
+    {
+      "id": "bug-071",
+      "timestamp": "2026-08-04T21:08:40.305Z",
+      "error_message": "Incorrect value in code",
+      "file": "public/app.js",
+      "root_cause": "Had \" — \"",
+      "fix": "Changed to \" — credited the rest of period \"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T21:08:40.305Z"
+    },
+    {
+      "id": "bug-072",
+      "timestamp": "2026-08-04T21:08:53.074Z",
+      "error_message": "Incorrect value in code",
+      "file": "public/sw.js",
+      "root_cause": "Had \"sideline-shell-v6\"",
+      "fix": "Changed to \"sideline-shell-v7\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T21:08:53.074Z"
+    },
+    {
+      "id": "bug-073",
+      "timestamp": "2026-08-04T21:13:41.413Z",
+      "error_message": "Significant refactor of ",
+      "file": "../AppData/Local/Temp/claude/c--Users-msholly-coach-app/7e71ed53-972e-49a0-b432-1e3393c7b6f8/scratchpad/verify3.cjs",
+      "root_cause": "4 lines replaced/restructured",
+      "fix": "Rewrote 9→15 lines (4 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "cjs"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T21:13:41.413Z"
+    },
+    {
+      "id": "bug-074",
+      "timestamp": "2026-08-04T21:20:00.000Z",
+      "error_message": "position:sticky on .clock-band did nothing — the band scrolled off at top:-770 after scrolling 1060px",
+      "file": "public/index.html",
+      "root_cause": "A sticky element can only stick inside its own parent's box. #clockBand was the first child of the left .gd-grid column, so it unstuck as soon as that column's box scrolled past — the column is only as tall as the band + scoreboard + nudge.",
+      "fix": "Moved #clockBand out of .gd-grid to be a direct child of section#p-game, so the panel (full tab height) is the containing block. Verified: top:0, onScreen:true, elementFromPoint returns .clock-band at scrollY 1060.",
+      "tags": [
+        "css",
+        "sticky",
+        "containing-block",
+        "game-day",
+        "layout"
+      ],
+      "related_bugs": [
+        "bug-075"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T21:20:00.000Z"
+    },
+    {
+      "id": "bug-075",
+      "timestamp": "2026-08-04T21:22:00.000Z",
+      "error_message": "The now-sticky clock band rendered see-through — the page content under it showed through the amber and both were unreadable",
+      "file": "public/app.css",
+      "root_cause": "@keyframes clockflash animates opacity to .35. That was harmless while the band was in flow with nothing behind it; pinned over page content it makes the band AND the text under it illegible.",
+      "fix": "Gave the band its own @keyframes bandflash that animates background-color (amber -> color-mix 52% amber/#1b1405) instead of opacity, plus a drop shadow. .clock-big.stopped keeps clockflash. Verified computed opacity:1, animationName:bandflash, band is the topmost element.",
+      "tags": [
+        "css",
+        "animation",
+        "opacity",
+        "sticky",
+        "legibility"
+      ],
+      "related_bugs": [
+        "bug-074"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T21:22:00.000Z"
+    },
+    {
+      "id": "bug-076",
+      "timestamp": "2026-08-04T21:24:00.000Z",
+      "error_message": "Puppeteer: second .jchip click was a no-op — keeper swap never fired, toast list came back empty",
+      "file": "test-harness (scratchpad verify2/verify3.cjs)",
+      "root_cause": "tapChip() calls renderOnField(), which replaces #onFieldChips innerHTML. Node handles captured before the first click are detached by the time the second click runs, so the second .click() dispatches into nothing and no error is thrown.",
+      "fix": "Re-query the DOM between the two taps (separate page.evaluate calls with a sleep). Applies to any two-tap flow in this app — sub, keeper swap, position swap.",
+      "tags": [
+        "testing",
+        "puppeteer",
+        "stale-node",
+        "silent-failure"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T21:24:00.000Z"
+    },
+    {
+      "id": "bug-077",
+      "timestamp": "2026-08-04T21:21:50.869Z",
+      "error_message": "Significant refactor of ",
+      "file": "public/app.css",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 10→27 lines (3 removed) | Also: /* Period + lives next to the badge it moves; Rese; .sb-top .pnext{border:1px solid rgba(255,255,255,. | Also: /* Game Day carries the cone accent while you are ; back to the live game is findable at a glance. Sel",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "css"
+      ],
+      "related_bugs": [],
+      "occurrences": 3,
+      "last_seen": "2026-08-04T21:22:27.550Z"
+    },
+    {
+      "id": "bug-078",
+      "timestamp": "2026-08-04T21:21:59.072Z",
+      "error_message": "Incorrect value in code",
+      "file": "public/index.html",
+      "root_cause": "Had \"btn-text alertbtn no-print\"",
+      "fix": "Changed to \"pill alertbtn no-print\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "html"
+      ],
+      "related_bugs": [],
+      "occurrences": 4,
+      "last_seen": "2026-08-04T21:26:01.093Z"
+    },
+    {
+      "id": "bug-079",
+      "timestamp": "2026-08-04T21:23:10.030Z",
+      "error_message": "Significant refactor of ",
+      "file": "public/app.js",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 3→8 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T21:23:10.030Z"
+    },
+    {
+      "id": "bug-080",
+      "timestamp": "2026-08-04T21:23:16.958Z",
+      "error_message": "Incorrect value in code",
+      "file": "public/app.js",
+      "root_cause": "Had \"⏸ FULL TIME — TAP PERIOD +\"",
+      "fix": "Changed to \"🏁 FULL TIME — FINISH THE GAME\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 4,
+      "last_seen": "2026-08-04T21:26:36.312Z"
+    },
+    {
+      "id": "bug-081",
+      "timestamp": "2026-08-04T21:23:28.908Z",
+      "error_message": "Wrong condition in logic",
+      "file": "public/app.js",
+      "root_cause": "Condition was: if (g.secs<=0)",
+      "fix": "Changed to: if (atFullTime()",
+      "tags": [
+        "auto-detected",
+        "logic-fix",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T21:23:28.908Z"
+    },
+    {
+      "id": "bug-082",
+      "timestamp": "2026-08-04T21:23:39.713Z",
+      "error_message": "CSS fix: background, border-color",
+      "file": "public/app.css",
+      "root_cause": "background: var(--cone) → var(--ink); border-color: var(--cone) → var(--ink)",
+      "fix": "Changed background: var(--cone) → var(--ink); border-color: var(--cone) → var(--ink)",
+      "tags": [
+        "auto-detected",
+        "style-fix",
+        "css"
+      ],
+      "related_bugs": [],
+      "occurrences": 3,
+      "last_seen": "2026-08-04T21:26:07.973Z"
+    },
+    {
+      "id": "bug-083",
+      "timestamp": "2026-08-04T21:24:05.211Z",
+      "error_message": "Wrong return value",
+      "file": "public/app.js",
+      "root_cause": "Was returning: '<span class=\"pp\">'+(isPartial(v)?'<span class=\"ha",
+      "fix": "Now returns: '<span class=\"pp\" title=\"Played this game\">'",
+      "tags": [
+        "auto-detected",
+        "return-value",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T21:24:05.211Z"
+    },
+    {
+      "id": "bug-084",
+      "timestamp": "2026-08-04T21:28:10.625Z",
+      "error_message": "Wrong operator: === should be >=",
+      "file": "../AppData/Local/Temp/claude/c--Users-msholly-coach-app/7e71ed53-972e-49a0-b432-1e3393c7b6f8/scratchpad/verify6.cjs",
+      "root_cause": "Used \"===\" instead of \">=\"",
+      "fix": "Changed operator === → >=",
+      "tags": [
+        "auto-detected",
+        "operator-fix",
+        "cjs"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T21:28:10.625Z"
+    },
+    {
+      "id": "bug-085",
+      "timestamp": "2026-08-04T21:28:17.419Z",
+      "error_message": "Wrong return value",
+      "file": "../AppData/Local/Temp/claude/c--Users-msholly-coach-app/7e71ed53-972e-49a0-b432-1e3393c7b6f8/scratchpad/verify6.cjs",
+      "root_cause": "Was returning: d&&d.open ? d.textContent.replace(/\\s+/g,\" \").trim",
+      "fix": "Now returns: d&&d.open ? d.textContent.replace(/\\s+/g,\" \").trim",
+      "tags": [
+        "auto-detected",
+        "return-value",
+        "cjs"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T21:28:17.419Z"
+    },
+    {
+      "id": "bug-077",
+      "timestamp": "2026-08-04T22:05:00.000Z",
+      "error_message": "At full time the Start button still said Start; tapping it reset the final period to a fresh 10:00",
+      "file": "public/app.js",
+      "root_cause": "toggleTimer() opens with `if(g.secs<=0){ g.secs=state.minsper*60; }` — correct between periods, wrong after the last one. Nothing distinguished 'clock ran out mid-game' from 'the game is over', so the end state offered the one action that silently credits everyone a period they did not play.",
+      "fix": "Added atFullTime() (started && !endedAt && !onBreak && secs<=0 && period>=maxPeriods()). toggleTimer() routes to nextPeriod() when it is true; renderGame() swaps #timerBtn to '🏁 Finish the game' (button.btn.btn-finish) and #bandBtn to '🏁 Finish'; updateClock() swaps the band note. Verified: clock stays 0:00 and the End-the-game confirm opens.",
+      "tags": [
+        "game-day",
+        "clock",
+        "full-time",
+        "state-machine",
+        "ledger"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T22:05:00.000Z"
+    },
+    {
+      "id": "bug-078",
+      "timestamp": "2026-08-04T22:07:00.000Z",
+      "error_message": "User: pill indicators are inconsistent — 'Wrist Alerts On' too tall, 'Synced' too small; same between 'Period n of n' and 'Period +'",
+      "file": "public/app.css",
+      "root_cause": "Each pill sized itself from its own content. An emoji's line box is taller than text's at the same font-size, so 🔕 Wrist alerts off measured 28px against Synced's 23px; Period + carried min-height:30px while .period-pill carried min-height:24px. Measured, not eyeballed.",
+      "fix": "One .pill class owns every metric (min-height:28px, line-height:1, inline-flex centred, fixed padding); .syncpill/.alertbtn/.period-pill/.sb-top .pnext keep only colour. Caps-only pills add .caps for the 1px optical nudge. Dropped the phone media query that shrank .syncpill. All four now measure 28px.",
+      "tags": [
+        "css",
+        "pills",
+        "emoji",
+        "line-height",
+        "consistency"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T22:07:00.000Z"
+    },
+    {
+      "id": "bug-088",
+      "timestamp": "2026-08-04T22:18:19.780Z",
+      "error_message": "Significant refactor of ",
+      "file": "src/worker.js",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 12→16 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T22:18:19.780Z"
+    },
+    {
+      "id": "bug-089",
+      "timestamp": "2026-08-04T22:19:22.889Z",
+      "error_message": "Function not marked async",
+      "file": "test/archive.test.mjs",
+      "root_cause": "Function uses await but wasn't declared async",
+      "fix": "Added async modifier",
+      "tags": [
+        "auto-detected",
+        "async-fix",
+        "mjs"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T22:19:22.889Z"
+    },
+    {
+      "id": "bug-090",
+      "timestamp": "2026-08-04T22:25:13.616Z",
+      "error_message": "Missing error handling in unfoldIcs",
+      "file": "src/worker.js",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T22:25:13.616Z"
+    },
+    {
+      "id": "bug-091",
+      "timestamp": "2026-08-04T22:26:34.514Z",
+      "error_message": "Significant refactor of ",
+      "file": "test/schedule.test.mjs",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 4→6 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "mjs"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T22:26:34.514Z"
+    },
+    {
+      "id": "bug-092",
+      "timestamp": "2026-08-04T22:27:31.848Z",
+      "error_message": "Incorrect value in code",
+      "file": "../AppData/Local/Temp/claude/c--Users-msholly-coach-app/7e71ed53-972e-49a0-b432-1e3393c7b6f8/scratchpad/live-schedule.mjs",
+      "root_cause": "Had \"../../../../../../../Users/msholly/coach-app/src/",
+      "fix": "Changed to \"file:///C:/Users/msholly/coach-app/src/worker.js\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "mjs"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T22:27:31.848Z"
+    },
+    {
+      "id": "bug-079",
+      "timestamp": "2026-08-04T22:35:00.000Z",
+      "error_message": "schedule test failed: expected 'Rancho Santa Margarita Rangers', got 'Rancho SantaMargarita Rangers'",
+      "file": "test/schedule.test.mjs",
+      "root_cause": "The FIXTURE was wrong, not the parser. RFC 5545 line folding inserts CRLF+space, and the continuation's leading space is the fold marker, not content — unfolding removes both and joins the halves exactly. A space that belongs to the text must sit at the END of the first line.",
+      "fix": "Corrected the fixture to 'SUMMARY:...Rancho Santa ' + ' Margarita Rangers'. Kept unfoldIcs() as replace(/\n[ \t]/g,'') — that is the correct RFC behaviour. Lesson: when a parser test fails on ICS/MIME folding, check the fixture against the RFC before touching the parser.",
+      "tags": [
+        "ics",
+        "rfc5545",
+        "test-fixture",
+        "parser",
+        "gamechanger"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T22:35:00.000Z"
+    },
+    {
+      "id": "bug-094",
+      "timestamp": "2026-08-04T22:38:45.493Z",
+      "error_message": "Incorrect value in code",
+      "file": "../AppData/Local/Temp/claude/c--Users-msholly-coach-app/7e71ed53-972e-49a0-b432-1e3393c7b6f8/scratchpad/frac-probe.cjs",
+      "root_cause": "Had \"C:/Users/msholly/coach-app/public/lineup-core.js\"",
+      "fix": "Changed to \"fs\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "cjs"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T22:38:45.493Z"
+    },
+    {
+      "id": "bug-095",
+      "timestamp": "2026-08-04T22:49:10.939Z",
+      "error_message": "Missing guard clause",
+      "file": "public/lineup-core.js",
+      "root_cause": "No early return/throw for edge case: e.id === id && e.frac > 1e-9",
+      "fix": "Added guard clause: if (e.id === id && e.frac > 1e-9)",
+      "tags": [
+        "auto-detected",
+        "guard-clause",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T22:49:10.939Z"
+    },
+    {
+      "id": "bug-096",
+      "timestamp": "2026-08-04T22:49:27.999Z",
+      "error_message": "Missing guard clause",
+      "file": "public/app.js",
+      "root_cause": "No early return/throw for edge case: !g.started",
+      "fix": "Added guard clause: if (!g.started)",
+      "tags": [
+        "auto-detected",
+        "guard-clause",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T22:49:27.999Z"
+    },
+    {
+      "id": "bug-097",
+      "timestamp": "2026-08-04T22:52:07.625Z",
+      "error_message": "Incorrect value in code",
+      "file": "public/app.js",
+      "root_cause": "Had '\n      +(isPartial(v)?'",
+      "fix": "Changed to '\n      +(split?'",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T22:52:07.625Z"
+    },
+    {
+      "id": "bug-080",
+      "timestamp": "2026-08-04T23:05:00.000Z",
+      "error_message": "User: 'When the game starts, why doesnt everyone start at 0?' — on-field chips read 1p/10m at kickoff before a ball was kicked",
+      "file": "public/lineup-core.js",
+      "root_cause": "buildPeriods stamps every lu.app entry frac:1 at BUILD time, and playedSoFar summed app[0..pi] including the in-progress period. The fracs are allocations ('the share you WILL play'), never elapsed time — the clock never touched them; only applySub/applyKeeperSwap/applyFormatOff move a frac, and only at the instant of the tap. The minutes label added earlier that day made the projection assert elapsed time, which was simply false.",
+      "fix": "Added LineupCore.playedThrough(lu,pi,id,live,rem) — discounts the period on the clock by the fraction still unplayed, for players currently in lu.periods[live] only; periods after live contribute zero. app.js playedSoFar() wraps it with remFrac() (1 before kickoff, 0 on a break because g.secs is then the BREAK clock). keptSoFar left plan-based on purpose (it backs the one-period-in-goal cap). Verified in-browser across kickoff/mid-period/sub/break/rollover and by 7 simulation tests.",
+      "tags": [
+        "game-day",
+        "fairness-ledger",
+        "elapsed-time",
+        "lineup-core",
+        "projection"
+      ],
+      "related_bugs": [
+        "bug-081"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T23:05:00.000Z"
+    },
+    {
+      "id": "bug-081",
+      "timestamp": "2026-08-04T23:10:00.000Z",
+      "error_message": "First cut of the elapsed formula scored a just-subbed-off player as 0 minutes instead of the 4.5 they played",
+      "file": "public/lineup-core.js",
+      "root_cause": "Used LineupCore.activeEntry() to decide 'is this player on the field'. activeEntry means 'their latest entry with frac left on it' — after a sub the outgoing player's entry still holds the frac they played (1 - 0.55 = 0.45), so it matched, the discount was applied to them too, and 0.45 - 0.55 clamped to 0.",
+      "fix": "Test membership in lu.periods[live] instead — that is the actual on-field roster. A player who is off needs no discount because applySub already trimmed their entry to exactly what they played. Caught by a scratchpad probe before it shipped.",
+      "tags": [
+        "lineup-core",
+        "off-by-semantics",
+        "active-entry",
+        "elapsed-time"
+      ],
+      "related_bugs": [
+        "bug-080"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T23:10:00.000Z"
+    },
+    {
+      "id": "bug-082",
+      "timestamp": "2026-08-04T23:14:00.000Z",
+      "error_message": "After the elapsed change the .pp half-pip appeared on almost every on-field chip",
+      "file": "public/app.js",
+      "root_cause": "ppHtml pipped on isPartial(displayedValue). The pip means 'a sub split one of their periods', but under elapsed timing every number is fractional mid-period, so the test matched nearly everyone and the signal carried nothing.",
+      "fix": "Added wasSplit(lu,pi,id), which tests the PLAN fracs per period, and passed it into ppHtml(v,split). Verified: mid-period only the actually-subbed player is pipped.",
+      "tags": [
+        "game-day",
+        "ui",
+        "signal-noise",
+        "elapsed-time"
+      ],
+      "related_bugs": [
+        "bug-080"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-08-04T23:14:00.000Z"
     }
   ]
 }

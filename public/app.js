@@ -31,10 +31,10 @@
       format:"u8",
       season:"Fall 2026",       // the ledger-reset boundary, stamped on every archive row
       posTotals:{},             // season D/F/GK periods from the archive — cached for offline
-      practice:[], lineup:null,
+      practice:[], practiceRun:{startedAt:0,idx:0,marks:[]}, lineup:null,
       played:{},   // career periods played, by player id — drives "rotate this responsibility"
       kept:{},     // career periods in goal, by player id
-      game:{us:0,them:0,period:1,secs:600,running:false}
+      game:{us:0,them:0,period:1,secs:600,running:false,onBreak:false,playerStats:{}}
     };
   }
   // Docs written by older versions of the app (or another device mid-upgrade).
@@ -42,8 +42,11 @@
     if(!s.played) s.played={};
     if(!s.kept) s.kept={};
     if(!s.format) s.format="u8";
+    if(s.venue!=="away") s.venue="home";   // manual for now — nothing auto-fills it
     if(!s.season) s.season="Fall 2026";
     if(!s.posTotals) s.posTotals={};
+    if(!s.practiceRun) s.practiceRun={startedAt:0,idx:0,marks:[]};
+    if(s.game&&!s.game.goals) s.game.goals=[];
     if(s.lineup){
       if(s.lineup.keeper==null) s.lineup.keeper=true;   // every pre-format lineup was U8
       LineupCore.ensureApp(s.lineup);
@@ -68,32 +71,202 @@
   var $=function(s,r){return (r||document).querySelector(s);};
   var $$=function(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s));};
   function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
-  function toast(msg){ var t=$("#toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(t._t); t._t=setTimeout(function(){t.classList.remove("show");},1900); }
-
-  /* ---------- tabs ---------- */
-  $$(".tab").forEach(function(b){
-    b.addEventListener("click",function(){
-      $$(".tab").forEach(function(x){x.setAttribute("aria-selected","false");});
-      b.setAttribute("aria-selected","true");
-      $$(".panel").forEach(function(p){p.classList.remove("active");});
-      $("#p-"+b.dataset.tab).classList.add("active");
-      if(b.dataset.tab==="game"){ renderGame(); renderLog(); }
+  // Toasts stack. A sticky one (subs, period changes, format switches — the
+  // things a coach has to act on) stays until it is tapped away; everything
+  // else still self-clears. Tap anywhere on a toast to dismiss it.
+  function toast(msg,sticky){
+    var box=$("#toast"); if(!box) return;
+    var el=document.createElement("div");
+    el.className="toast"+(sticky?" stick":"");
+    el._at=nowMs();
+    el.innerHTML='<span class="tmsg">'+esc(msg)+'</span><span class="tage">now</span>'+(sticky?'<span class="x">✕</span>':'');
+    el.addEventListener("click",function(){ dropToast(el); });
+    box.appendChild(el);
+    requestAnimationFrame(function(){ el.classList.add("show"); });
+    if(!sticky) setTimeout(function(){ dropToast(el); },1900);
+    var live=$$("#toast .toast");
+    while(live.length>4){ box.removeChild(live.shift()); }   // the bar is not a toast, never evict it
+    syncToastBar();
+  }
+  function dropToast(el){
+    if(!el||el._gone) return; el._gone=true;
+    el.classList.remove("show");
+    setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); syncToastBar(); },250);
+    syncToastBar();
+  }
+  /* ---------- ask(): the app's only confirmation ----------
+     confirm()/prompt() block the whole page — the game clock stops repainting
+     and the tick can't run — so every question goes through this instead.
+     Resolves true/false, or the trimmed string / null when opts.input is set. */
+  var askDone=null, askIsText=false;
+  function askClose(v){
+    var f=askDone; askDone=null;
+    var dlg=$("#askDialog"); if(dlg&&dlg.open) dlg.close();
+    if(f) f(v);
+  }
+  function askYes(){
+    var inp=$("#askInput");
+    if(inp){ var v=(inp.value||"").trim(); askClose(v||null); return; }
+    askClose(true);
+  }
+  function ask(o){
+    o=o||{};
+    var isText=(o.input!=null);
+    return new Promise(function(resolve){
+      var dlg=$("#askDialog");
+      if(!dlg||!dlg.showModal){ resolve(isText?(o.input||null):true); return; }
+      if(askDone) askClose(askIsText?null:false);   // never stack two questions
+      askDone=resolve; askIsText=isText;
+      dlg.innerHTML='<h4>'+esc(o.title||"Are you sure?")+'</h4>'
+        +(o.body?'<p>'+esc(o.body).replace(/\n/g,"<br>")+'</p>':"")
+        +(isText?'<input type="text" id="askInput" value="'+esc(o.input)+'" placeholder="'+esc(o.placeholder||"")+'" autocomplete="off">':"")
+        +'<div class="btns"><button class="btn ghost" data-act="ask-no">'+esc(o.cancel||"Cancel")+'</button>'
+        +'<button class="btn'+(o.danger?" cone":"")+'" style="flex:2" data-act="ask-yes">'+esc(o.ok||"Yes")+'</button></div>';
+      dlg.showModal();
+      var inp=$("#askInput");
+      if(inp){
+        inp.focus(); inp.select();
+        inp.addEventListener("keydown",function(e){ if(e.key==="Enter"){ e.preventDefault(); askYes(); } });
+      }
     });
+  }
+
+  // Sticky toasts outlive the moment they describe — "2m ago" is the difference
+  // between a sub you already made and one you are about to make.
+  function ageTxt(ms){
+    var s=Math.max(0,Math.round(ms/1000));
+    if(s<10) return "now";
+    if(s<60) return s+"s ago";
+    var m=Math.round(s/60);
+    if(m<60) return m+"m ago";
+    return Math.round(m/60)+"h ago";
+  }
+  function tickToastAges(){
+    var n=nowMs();
+    $$("#toast .toast").forEach(function(el){
+      var tag=el.querySelector(".tage");
+      if(tag&&el._at) tag.textContent=ageTxt(n-el._at);
+    });
+  }
+  function clearToasts(){
+    $$("#toast .toast").forEach(dropToast);
+    var bar=$("#toastBar"); if(bar&&bar.parentNode) bar.parentNode.removeChild(bar);
+  }
+  // Only worth the space once messages are actually piling up.
+  function syncToastBar(){
+    var box=$("#toast"); if(!box) return;
+    var bar=$("#toastBar"), n=$$("#toast .toast").filter(function(t){ return !t._gone; }).length;
+    if(n<2){ if(bar&&bar.parentNode) bar.parentNode.removeChild(bar); return; }
+    if(!bar){
+      bar=document.createElement("div");
+      bar.id="toastBar"; bar.className="toastbar";
+      bar.innerHTML='<button type="button" data-act="toast-clear"></button>';
+      box.insertBefore(bar,box.firstChild);
+    }
+    if(box.firstChild!==bar) box.insertBefore(bar,box.firstChild);
+    bar.firstChild.textContent="Clear all ("+n+")";
+  }
+  // Android/Chrome only — iOS Safari has never shipped the Vibration API, so
+  // this is a no-op there and beep() stays the alarm. Guarded, never throws.
+  function buzz(pat){ try{ if(navigator.vibrate) navigator.vibrate(pat); }catch(e){} }
+
+  /* ---------- tabs (lower-left FAB speed-dial) ---------- */
+  var tabNav=$("#tabNav"), fabToggle=$("#fabToggle"), fabBack=$("#fabBack");
+  function closeFabNav(){ if(tabNav){ tabNav.classList.remove("open"); } if(fabBack){ fabBack.hidden=true; }
+    if(fabToggle){ fabToggle.setAttribute("aria-expanded","false"); fabToggle.textContent="☰"; } }
+  if(fabToggle){
+    fabToggle.addEventListener("click",function(){
+      var open=tabNav.classList.toggle("open");
+      if(fabBack) fabBack.hidden=!open;
+      fabToggle.setAttribute("aria-expanded",open?"true":"false");
+      fabToggle.textContent=open?"✕":"☰";
+    });
+  }
+  // Tap-away closes the menu and nothing else. A document-level listener let the
+  // same tap through to whatever control sat underneath — on Game Day that is a
+  // score button or a player chip, so closing the menu changed the game.
+  if(fabBack) fabBack.addEventListener("click",closeFabNav);
+  /* Tabs are history entries: the hash carries "p=<tab>" alongside the team
+     token, so Back leaves a tab instead of leaving the app, and a link can
+     point at one. The hash (not a path) because the token already lives there,
+     it needs no worker route or SW change, and it survives an offline launch. */
+  var TABS=["lineup","practice","drills","game","season","rules"];
+  function activeTab(){ var b=$('.tab[aria-selected="true"]'); return b?b.dataset.tab:"lineup"; }
+  function tabFromHash(){
+    var m=(location.hash||"").match(/[#&]p=([a-z]+)/);
+    return (m&&TABS.indexOf(m[1])>=0)?m[1]:null;
+  }
+  function hashFor(tab,tok){
+    var t=tok||TEAM, s=t?("t="+t):"";
+    if(tab&&tab!=="lineup") s+=(s?"&":"")+"p="+tab;   // lineup is the default, keep its URL clean
+    return s?("#"+s):"#";
+  }
+  function showTab(tab){
+    if(TABS.indexOf(tab)<0) tab="lineup";
+    $$(".tab").forEach(function(x){ x.setAttribute("aria-selected",String(x.dataset.tab===tab)); });
+    $$(".panel").forEach(function(p){ p.classList.toggle("active",p.id==="p-"+tab); });
+    if(tab==="game") renderGame();
+    if(tab==="season") renderLog();
+    if(tab==="practice") renderBurn();
+    closeFabNav();
+  }
+  function selectTab(tab){
+    if(tab===activeTab()){ closeFabNav(); return; }   // no history entry for a no-op
+    showTab(tab);
+    try{ history.pushState({tab:tab},"",hashFor(tab)); }catch(e){ location.hash=hashFor(tab).slice(1); }
+  }
+  $$(".tab").forEach(function(b){ b.addEventListener("click",function(){ selectTab(b.dataset.tab); }); });
+  window.addEventListener("popstate",function(){ showTab(tabFromHash()||"lineup"); });
+  // a hand-edited URL fires hashchange but not popstate
+  window.addEventListener("hashchange",function(){
+    var t=tabFromHash()||"lineup";
+    if(t!==activeTab()) showTab(t);
   });
 
   /* ---------- roster ---------- */
+  // Tri-state: IN (playing) -> LATE (expected, not here for the build) -> OUT (not
+  // coming). LATE behaves like OUT for the lineup builder; flipping a late arrival
+  // to IN just runs through refreshLineup() like any other roster edit.
+  function rosterState(p){ return p.present?"in":(p.late?"late":"out"); }
   function renderRoster(){
     var ul=$("#rosterList");
+    // The whole row is the toggle — a bare "IN" label didn't read as tappable.
     ul.innerHTML=state.roster.map(function(p,i){
-      return '<li class="'+(p.present?"":"out")+'" data-id="'+p.id+'">'
+      var st=rosterState(p), label=st==="in"?"IN":(st==="late"?"LATE":"OUT");
+      return '<li class="'+(st==="in"?"":st)+'" data-id="'+p.id+'">'
+        +'<button class="rowtog" data-act="toggle-present" data-id="'+p.id+'"'
+        +' aria-label="'+esc(p.name)+' is '+label+' — tap to change">'
         +'<span class="pnum">'+(i+1)+'</span>'
         +'<span class="pname">'+esc(p.name)+'</span>'
-        +'<button class="toggle no-print" data-act="toggle-present" data-id="'+p.id+'">'+(p.present?"IN":"OUT")+'</button>'
+        +'<span class="state">'+label+'</span>'
+        +'</button>'
         +'<button class="icon no-print" data-act="del-player" data-id="'+p.id+'" title="Remove">×</button>'
         +'</li>';
     }).join("");
+    renderGoLive();
     var n=state.roster.filter(function(p){return p.present;}).length;
-    $("#presentCount").innerHTML="<b>"+n+"</b> present of "+state.roster.length+" · field size "+state.onfield+" ⇒ "+Math.max(0,n-state.onfield)+" on the bench each period";
+    var late=state.roster.filter(function(p){return rosterState(p)==="late";}).length;
+    $("#presentCount").innerHTML="<b>"+n+"</b> present of "+state.roster.length
+      +(late?" · <b>"+late+"</b> running late":"")
+      +" · field size "+state.onfield+" ⇒ "+Math.max(0,n-state.onfield)+" on the bench each period";
+  }
+
+  // A game is "live" from the first Start until full time is stamped.
+  function gameUnderway(){
+    var g=state.game;
+    return !!(state.lineup && !g.endedAt && (g.started||g.period>1||g.us||g.them));
+  }
+  function renderGoLive(){
+    var b=$("#goLive"); if(!b) return;
+    var live=gameUnderway();
+    // Same signal drives the FAB's Game Day tab: cone = a game is live now.
+    var t=$('.tab[data-tab="game"]'); if(t) t.classList.toggle("live",live);
+    b.hidden=!live;
+    if(!live) return;
+    var g=state.game;
+    // one text node: .btn is a flex row, so extra children get spread apart
+    b.innerHTML='<span class="lv"></span><span>Game in progress · Period '+g.period+' of '+maxPeriods()
+      +' · '+g.us+'–'+g.them+' — go to Game Day</span>';
   }
 
   /* ---------- lineup ---------- */
@@ -123,9 +296,8 @@
 
   function buildLineup(reshuffle,replace){
     var g=state.game;
-    if(!replace && state.lineup && (g.period>1||g.us||g.them)
-       && !confirm("Start a new game? The score and period reset.\n\nTo redraw this game's sheet instead, cancel and use ↻ Reshuffle.")) return false;
-
+    // The "start a new game?" question lives at the click site now — ask() is
+    // async and buildLineup has to stay synchronous for its boolean contract.
     var keep = replace ? frozenUpto() : 0;
     var present=state.roster.filter(function(p){return p.present;});
     if(present.length < state.onfield){
@@ -155,14 +327,17 @@
     order.sort(function(a,b){ return totPlayed(lu,a.id)-totPlayed(lu,b.id); });
 
     var Q=state.periods, N=state.onfield;
+    // Mid-game the keeper setting belongs to the game, not the team (t5) — a
+    // redraw must not resurrect a keeper the coach switched off on the field.
+    var keeperFlag=(keep>0 && lu.keeper!=null) ? lu.keeper : fmt().keeper;
     // Keeper (fewest career keeps, one period max) and D/F seeding (least
     // experience at the position first — decision 4) both live in the core.
     LineupCore.buildPeriods(lu, order.map(function(p){return p.id;}),
-      {keep:keep, Q:Q, N:N, keeper:fmt().keeper, kept:state.kept, posTotals:state.posTotals});
+      {keep:keep, Q:Q, N:N, keeper:keeperFlag, kept:state.kept, posTotals:state.posTotals});
     // Anyone who played a frozen period stays on the sheet even if they've since gone home.
     var ids=order.map(function(p){return p.id;});
     for(var z=0;z<keep;z++){ lu.periods[z].forEach(function(id){ if(ids.indexOf(id)<0) ids.push(id); }); }
-    lu.playerOrder=ids; lu.Q=Q; lu.N=N; lu.minsper=state.minsper; lu.keeper=fmt().keeper;
+    lu.playerOrder=ids; lu.Q=Q; lu.N=N; lu.minsper=state.minsper; lu.keeper=keeperFlag;
     lu.handEdited=false;
     tally(lu,keep,1);
 
@@ -170,6 +345,9 @@
     if(!replace){
       g.period=1; g.us=0; g.them=0; g.running=false; g.started=false; g.secs=state.minsper*60;
       g.gid=genToken(); g.startedAt=0; g.endedAt=0;   // archive identity — kickoff works offline
+      g.recent=[]; g.stoppedAt=0;                     // Fix-a-mistake starts clean each game
+      g.goals=[];                                     // every goal this game, newest first
+      g.onBreak=false; g.breakKind=null; g.playerStats={};
       stopTicker();
     }
     save(); renderLineup(); renderGame();
@@ -185,32 +363,62 @@
   // The period's credit splits at the clock, so the season ledger reflects real minutes.
   function subNow(outId,inId){
     var lu=state.lineup; if(!lu) return;
-    var pi=curPi();
-    var frac=Math.min(1,Math.max(0, state.game.secs/Math.max(1,state.minsper*60)));   // what's left is what the sub plays
+    var pi=editPi(), future=onBreakNext(), frac=editFrac();
     if(!LineupCore.applySub(lu,pi,outId,inId,frac)) return;
-    logEvent("sub",{out:outId,"in":inId,frac:Math.round(frac*1000)/1000},inId);
-    queueAppearances(pi+1);
+    if(future) lu.handEdited=true;
+    logEvent("sub",{out:outId,"in":inId,frac:Math.round(frac*1000)/1000,forPeriod:pi+1},inId);
+    queueAppearances(curPi()+1);   // only periods actually played reach the ledger
     save(); renderLineup(); renderGame();
-    var msg=nameOf(inId)+" on for "+nameOf(outId)+" — "+r1(frac*state.minsper)+" min credited";
+    // Before kickoff the clock hasn't run, so nothing is earned yet — it's a sheet
+    // edit. Saying "10 min credited" there read as a mystery reward (finding: toast).
+    var msg=future
+      ? nameOf(inId)+" starts period "+(pi+1)+" in place of "+nameOf(outId)+" — full period"
+      : (state.game.started
+        ? nameOf(inId)+" on for "+nameOf(outId)+" — credited the rest of period "+(pi+1)+" ("+r1(frac*state.minsper)+" min), booked now. Another change re-splits it."
+        : nameOf(inId)+" in for "+nameOf(outId)+" in period "+(pi+1)+" — not started, nothing played yet");
     // The sub may already be down for a period in goal later; the guide caps that at one.
     if((lu.gkActual[inId]||0)>1.0001) msg+=". Careful — that puts them over a period in goal.";
-    toast(msg);
+    buzz(40);
+    toast(msg,true);
   }
   function curPi(){ return Math.min(state.game.period-1, state.lineup.Q-1); }
+  // During an inter-period break g.period has not advanced yet, so curPi() still
+  // points at the period that just ENDED — showing those players under "On the
+  // field" is what made the break confusing. AYSO wants substitutions made at
+  // these stops, and the break is when the coach briefs the team, so the panel
+  // switches to the period about to START and edits that one.
+  function onBreakNext(){
+    var g=state.game, lu=state.lineup;
+    return !!(lu && g.onBreak && curPi()+1 < lu.Q);
+  }
+  function editPi(){ return onBreakNext() ? curPi()+1 : curPi(); }
+  // A period that hasn't kicked off is edited whole; a live one splits at the clock.
+  function editFrac(){
+    if(onBreakNext()) return 1;
+    return Math.min(1,Math.max(0, state.game.secs/Math.max(1,state.minsper*60)));
+  }
 
   // Requirement 1: swap who's in goal without anyone leaving the field.
   function swapKeeper(newId){
     var lu=state.lineup; if(!lu||!lu.keeper||!newId) return;
-    var pi=curPi(), old=lu.gk[pi];
-    var frac=Math.min(1,Math.max(0, state.game.secs/Math.max(1,state.minsper*60)));
+    var pi=editPi(), future=onBreakNext(), old=lu.gk[pi];
+    var frac=editFrac();
     if(!LineupCore.applyKeeperSwap(lu,pi,newId,frac)) return;
-    if(!state.game.started) lu.handEdited=true;
-    logEvent("keeper",{out:old,"in":newId},newId);
-    queueAppearances(pi+1);
+    if(!state.game.started||future) lu.handEdited=true;
+    logEvent("keeper",{out:old,"in":newId,frac:Math.round(frac*1000)/1000,forPeriod:pi+1},newId);
+    queueAppearances(curPi()+1);
     save(); renderLineup(); renderGame();
-    var msg=nameOf(newId)+" in goal for "+nameOf(old)+" — "+r1(frac*state.minsper)+" min in goal credited";
+    var msg=future
+      ? nameOf(newId)+" takes the goal for period "+(pi+1)+" instead of "+nameOf(old)
+      : (state.game.started
+        // "gets the last 5.5 min" read as a promise about the future. The credit
+        // is booked NOW against the rest of the period; a further change in the
+        // same period overwrites the split, it does not add to it.
+        ? nameOf(newId)+" in goal for "+nameOf(old)+" — credited the rest of period "+(pi+1)+" in goal ("+r1(frac*state.minsper)+" min), booked now. Another change re-splits it."
+        : nameOf(newId)+" in goal for period "+(pi+1)+" instead of "+nameOf(old)+" — not started yet");
     if((lu.gkActual[newId]||0)>1.0001) msg+=". Careful — that puts them over a period in goal.";
-    toast(msg);
+    buzz(40);
+    toast(msg,true);
   }
 
   // Tap-to-select, tap-to-place (decision on req 4: forgiving beats drag on a
@@ -222,14 +430,14 @@
     if(sel&&sel.id===id&&sel.where===where){ sel=null; renderOnField(); return; }
     if(!sel){ sel={id:id,where:where}; renderOnField(); return; }
     var a=sel; sel=null;
-    var pi=curPi();
+    var pi=editPi();
     if(a.where==="field"&&where==="field"){
       var gkNow=lu.gk[pi];
       if(id===gkNow){ swapKeeper(a.id); }
       else if(a.id===gkNow){ swapKeeper(id); }
       else if(LineupCore.applyPosSwap(lu,pi,a.id,id)){
-        if(!state.game.started) lu.handEdited=true;
-        queueAppearances(pi+1);
+        if(!state.game.started||onBreakNext()) lu.handEdited=true;
+        queueAppearances(curPi()+1);
         save(); renderLineup(); renderGame();
         toast(nameOf(a.id)+" ↔ "+nameOf(id));
       } else renderOnField();
@@ -339,13 +547,15 @@
   function drill(id){ return DRILLS.filter(function(d){return d.id===id;})[0]; }
   function renderPractice(){
     var ol=$("#planList"), empty=$("#planEmpty");
-    if(!state.practice.length){ ol.innerHTML=""; empty.style.display="block"; $("#planTotal").textContent="0"; return; }
+    if(!state.practice.length){ ol.innerHTML=""; empty.style.display="block"; $("#planTotal").textContent="0"; renderBurn(); return; }
     empty.style.display="none";
+    var run=state.practiceRun||{}, live=!!run.startedAt;
     var acc=0, total=state.practice.reduce(function(a,x){return a+(x.mins||0);},0);
     ol.innerHTML=state.practice.map(function(item,i){
       var d=drill(item.id); if(!d) return "";
       var start=acc; acc+=item.mins||0;
-      return '<li data-i="'+i+'">'
+      var cls=live?(i<run.idx?"done":(i===run.idx?"cur":"")):"";
+      return '<li class="'+cls+'" data-i="'+i+'">'
         +'<span class="clock tnum">'+fmtClock(start)+'</span>'
         +'<span class="pt"><button class="nm linklike" data-act="view-drill" data-id="'+item.id+'">'+esc(d.name)+'</button><span class="sk"> '+d.skills.join(" · ")+'</span></span>'
         +'<span class="mins"><input type="number" min="1" max="30" value="'+(item.mins||d.mins)+'" data-act="set-mins" data-i="'+i+'"><span class="hint">min</span></span>'
@@ -355,8 +565,95 @@
         +'</li>';
     }).join("");
     $("#planTotal").textContent=total;
+    renderBurn();
   }
   function fmtClock(m){ var mm=Math.floor(m); return Math.floor(mm/60)+":"+(mm%60<10?"0":"")+(mm%60); }
+
+  /* ---------- practice burn-down ----------
+     Work remaining (minutes) against wall-clock elapsed. The plan line is what
+     the sheet promises; the actual line is where you really are, stepped each
+     time you tap Next drill. Water breaks and re-explaining a drill are never
+     in the plan — they show up here as the gap, which is the whole point. */
+  function planTotal(){ return state.practice.reduce(function(a,x){ return a+(x.mins||0); },0); }
+  function plannedStart(i){ return state.practice.slice(0,i).reduce(function(a,x){ return a+(x.mins||0); },0); }
+  function elapsedMin(){
+    var run=state.practiceRun;
+    return (!run||!run.startedAt) ? 0 : (nowMs()-run.startedAt)/60000;
+  }
+  // Minutes of the PLAN that are actually in the bank. Finished drills count
+  // in full; the one running counts only up to its planned length, so a drill
+  // that overruns stops earning credit — that stall is the "behind" number.
+  function workDone(){
+    var run=state.practiceRun, n=state.practice.length, idx=Math.min(run.idx||0,n);
+    var done=plannedStart(idx);
+    if(idx<n){
+      var since=idx>0?((run.marks||[])[idx-1]||0):0;
+      done+=Math.min(Math.max(0,elapsedMin()-since), state.practice[idx].mins||0);
+    }
+    return done;
+  }
+  function renderBurn(){
+    var box=$("#burnBox"); if(!box) return;
+    var run=state.practiceRun||{startedAt:0,idx:0,marks:[]}, total=planTotal();
+    if(!state.practice.length){ box.innerHTML=""; return; }
+    if(!run.startedAt){
+      box.innerHTML='<div class="burn-idle"><div><b>'+total+' min planned.</b> Start the clock when the first drill kicks off — '
+        +'the chart then tracks whether you are ahead or behind, water breaks and all.</div>'
+        +'<button class="btn" data-act="practice-start">▶ Start practice</button></div>';
+      return;
+    }
+    var el=elapsedMin(), n=state.practice.length, idx=Math.min(run.idx,n);
+    var banked=workDone(), done=idx>=n;
+    // behind = the plan minutes you should have banked by now, minus what you have
+    var behind=done ? (el-total) : (Math.min(el,total)-banked);   // + = late, − = early
+    var W=300, H=92, PL=4, PR=4, PT=8, PB=14;
+    var maxX=Math.max(total, el)*1.04||1;
+    var X=function(m){ return PL+(m/maxX)*(W-PL-PR); };
+    var Y=function(v){ return PT+(1-(v/(total||1)))*(H-PT-PB); };
+    // planned: total → 0 over the planned duration
+    var plan='<line class="pl" x1="'+X(0)+'" y1="'+Y(total)+'" x2="'+X(total)+'" y2="'+Y(0)+'"/>';
+    // actual: a step per completed drill, then a leg out to "now"
+    var pts=[[0,total]];
+    (run.marks||[]).forEach(function(m,i){ pts.push([m,total-plannedStart(i+1)]); });
+    pts.push([el,total-banked]);
+    var actual='<polyline class="ac'+(behind>1?" late":"")+'" points="'+pts.map(function(p){ return X(p[0])+","+Y(p[1]); }).join(" ")+'"/>';
+    var head=done
+      ? (behind>1?"Ran "+Math.round(behind)+" min long":(behind<-1?"Finished "+Math.round(-behind)+" min early":"Finished on time"))
+      : (Math.abs(behind)<1?"On schedule":(behind>0?Math.round(behind)+" min behind":Math.round(-behind)+" min ahead"));
+    var cur=done?null:state.practice[idx];
+    box.innerHTML='<div class="burn-head"><span class="st'+(behind>1?" late":(behind<-1?" early":""))+'">'+head+'</span>'
+      +'<span class="hint tnum">'+Math.round(el)+' of '+total+' min elapsed</span></div>'
+      +'<svg class="burn-svg" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" aria-hidden="true">'
+      +'<line class="ax" x1="'+X(0)+'" y1="'+Y(0)+'" x2="'+X(maxX)+'" y2="'+Y(0)+'"/>'+plan+actual
+      +'<circle class="now'+(behind>1?" late":"")+'" cx="'+X(el)+'" cy="'+Y(total-banked)+'" r="3.5"/></svg>'
+      +'<div class="burn-legend"><span><i class="pl"></i> plan</span><span><i class="ac"></i> actual</span>'
+      +'<span class="hint">water breaks show up as the gap</span></div>'
+      +'<div class="burn-btns">'
+      +(cur?'<button class="btn" data-act="practice-next">✓ Done — next drill</button>'
+           :'<span class="burn-done">Practice complete.</span>')
+      +'<button class="btn ghost" style="flex:0 0 auto" data-act="practice-reset">Reset</button></div>'
+      +(cur?'<div class="burn-now">Now: <b>'+esc((drill(cur.id)||{}).name||"—")+'</b> · '+(cur.mins||0)+' min</div>':"");
+  }
+  function practiceStart(){
+    state.practiceRun={startedAt:nowMs(),idx:0,marks:[]};
+    save(); renderPractice();
+    toast("Practice clock started");
+  }
+  function practiceNext(){
+    var run=state.practiceRun; if(!run||!run.startedAt) return;
+    if(run.idx>=state.practice.length) return;
+    (run.marks=run.marks||[]).push(Math.round(elapsedMin()*10)/10);
+    run.idx++;
+    save(); renderPractice();
+  }
+  function practiceReset(){
+    ask({title:"Reset the practice clock?", body:"The plan itself is not changed.", ok:"Reset the clock", danger:true})
+      .then(function(ok){
+        if(!ok) return;
+        state.practiceRun={startedAt:0,idx:0,marks:[]};
+        save(); renderPractice();
+      });
+  }
 
   /* ---------- drills ---------- */
   var activeFilter="All";
@@ -386,16 +683,28 @@
 
   /* ---------- game day ---------- */
   var ticker=null, anchor=0;
+  function mmssTxt(s){ s=Math.max(0,s); var mm=Math.floor(s/60), ss=s%60; return mm+":"+(ss<10?"0":"")+ss; }
   function renderGame(){
     var g=state.game;
-    $("#usName").textContent=state.team||"Home";
+    $("#usName").textContent=state.team||"Our team";
+    $("#usVenue").textContent=state.venue==="away"?"Away":"Home";
     $("#usScore").textContent=g.us; $("#themScore").textContent=g.them;
-    $("#periodPill").textContent="Period "+g.period;
+    var pill=$("#periodPill");
+    pill.classList.toggle("break",!!g.onBreak);
+    pill.textContent = g.onBreak ? (g.breakKind==="half"?"Halftime":"Sub break") : "Period "+g.period+" of "+maxPeriods();
     updateClock();
-    $("#timerBtn").innerHTML=g.running?"⏸ Pause":"▶ Start";
-    $("#timerBtn").className="btn "+(g.running?"btn-pause":"btn-start");
+    // At full time Start is the wrong verb — there is nothing left to start.
+    // The button becomes the one correct action; a period that ended by mistake
+    // is Fix a mistake's job, not this button's.
+    var ft=atFullTime();
+    $("#timerBtn").innerHTML=ft?"🏁 Finish the game":(g.running?"⏸ Pause":"▶ Start");
+    $("#timerBtn").className="btn "+(ft?"btn-finish":(g.running?"btn-pause":"btn-start"));
+    var bb=$("#bandBtn"); if(bb) bb.innerHTML=ft?"🏁 Finish":"▶ Start";
     renderOnField();
     renderNudge();
+    renderFmtCard();
+    renderFixCard();
+    renderGoLive();
   }
   // Guide: the remedy for a lopsided game is fewer players on the dominant side.
   function renderNudge(){
@@ -407,18 +716,38 @@
       : "Down by "+(-d)+". Nothing to change on your side; keep it positive and keep coaching.";
   }
   function updateClock(){
-    var g=state.game, s=Math.max(0,g.secs);
-    var mm=Math.floor(s/60), ss=s%60;
+    var g=state.game, s=Math.max(0,g.secs), txt=mmssTxt(s);
     var el=$("#clock");
-    el.textContent=mm+":"+(ss<10?"0":"")+ss;
+    el.textContent=txt;
     // Requirement 6: a stopped clock mid-game must be loud — fired on manual
     // pause AND period expiry (the case the requirement actually names).
     var stopped=!!(g.started&&!g.running);
-    el.className="clock-big tnum"+(g.running?" run":"")+(s<=30&&s>0?" warn":"")+(stopped?" stopped":"");
-    var note=$("#clockNote"); if(note) note.hidden=!stopped;
+    el.className="clock-big tnum"+(!stopped&&g.running?" run":"")+(!stopped&&s<=30&&s>0?" warn":"")+(stopped?" stopped":"");
+    // 1b's alarm, kept in 1d: the stopped clock becomes a band with Start inside it.
+    var band=$("#clockBand");
+    if(band){
+      band.hidden=!stopped;
+      if(stopped){
+        $("#bandClock").textContent=txt;
+        $("#bandNote").textContent = atFullTime() ? "🏁 FULL TIME — FINISH THE GAME"
+          : (s===0 ? "⏸ PERIOD OVER — TAP START" : "⏸ CLOCK STOPPED — TAP START");
+      }
+    }
+    // Gated here rather than in renderGame because tick() only comes through
+    // updateClock — otherwise Reset would stay hidden for a whole running period.
+    // Both clock tags are absolute, so toggling this shifts nothing.
+    var rt=$("#resetTag"); if(rt) rt.hidden=!canReset();
     renderEnds();
+    paintLock(txt);   // no-op unless the pocket lock is up
   }
   function maxPeriods(){ return state.lineup?state.lineup.Q:state.periods; }
+  // Last period, clock at zero, no break running: the game is over and the only
+  // correct action is to close it out. Start would silently re-run the final
+  // period on a fresh 10:00 and quietly credit everyone a period they didn't play.
+  function atFullTime(){
+    var g=state.game;
+    return !!(g.started && !g.endedAt && !g.onBreak && g.secs<=0 && g.period>=maxPeriods());
+  }
   // Requirement 5 (as walked back, decision 1): a secondary wall-clock readout.
   // ponytail: labelled an estimate on purpose — between-period breaks aren't modelled.
   function renderEnds(){
@@ -435,13 +764,53 @@
     if(elapsed<1) return;
     anchor+=elapsed*1000;
     g.secs-=elapsed;
-    if(g.secs<=0){ g.secs=0; g.running=false; stopTicker(); beep(); logEvent("clock",{running:false,expired:true}); toast("Period "+g.period+" over — sub time!"); renderGame(); save(); return; }
-    updateClock();
-    saveLocal();   // ponytail: local only — a full save() every second would spam the sync push
+    if(g.secs>0){ updateClock(); saveLocal(); return; }   // ponytail: local only — a full save() every second would spam the sync push
+    g.secs=0;
+    if(g.onBreak) advancePeriod(); else periodExpired();
   }
-  function startTicker(){ if(ticker)return; anchor=nowMs(); ticker=setInterval(tick,1000); }
-  function stopTicker(){ if(ticker){clearInterval(ticker);ticker=null;} }
+  // Guide: 2–3 min sub break between quarters, 5 min at halftime (10 on a hot
+  // day — Fix a mistake's clock-set covers that manually). The break runs on
+  // its own; only live play needs the coach's Start tap.
+  function periodExpired(){
+    var g=state.game, ended=g.period;
+    beep();
+    logEvent("clock",{running:false,expired:true});
+    if(ended>=maxPeriods()){
+      g.running=false; g.onBreak=false; g.stoppedAt=nowMs(); stopTicker();
+      save(); renderGame();
+      toast("Period "+ended+" over — that's full time. Tap Period + to close out the game.",true);
+      return;
+    }
+    logEvent("period",{ended:ended});
+    queueAppearances(ended);
+    var half=(maxPeriods()%2===0 && ended===maxPeriods()/2);
+    g.onBreak=true; g.breakKind=half?"half":"sub"; g.running=true; g.secs=half?300:150;
+    anchor=nowMs(); startTicker();
+    save(); renderGame();
+    toast(half?"Halftime — 5 min break":"Sub break — 2–3 min, then Period "+(ended+1),true);
+  }
+  function advancePeriod(){
+    var g=state.game, lu=state.lineup;
+    var gkFn=function(p){ return (lu&&lu.keeper) ? (lu.gk||[])[Math.min(p-1,lu.Q-1)] : null; };
+    var prevGk=gkFn(g.period);
+    g.onBreak=false; g.running=false; g.stoppedAt=nowMs(); stopTicker();
+    g.period++; g.secs=state.minsper*60;
+    beep();
+    save(); renderGame();
+    // The sheet rotates the keeper on its own at every period boundary — that
+    // is a change to the field the coach never tapped for, so it gets said.
+    var newGk=gkFn(g.period);
+    if(newGk && newGk!==prevGk){
+      toast("Goalkeeper change — "+nameOf(newGk)+" goes in goal for period "+g.period
+        +(prevGk?", "+nameOf(prevGk)+" comes out":"")+".",true);
+    }
+    toast("Period "+g.period+" — tap Start when ready",true);
+  }
+  function startTicker(){ if(!ticker){ anchor=nowMs(); ticker=setInterval(tick,1000); } syncWake(); syncAlarm(); }
+  function stopTicker(){ if(ticker){clearInterval(ticker);ticker=null;} syncWake(); syncAlarm(); }
   function beep(){
+    // The Goalie-app "you cannot miss this" buzz, where the platform allows it.
+    buzz([400,150,400,150,700]);
     try{
       var Ctx=window.AudioContext||window.webkitAudioContext; if(!Ctx)return;
       var ac=new Ctx(); var o=ac.createOscillator(), gain=ac.createGain();
@@ -451,58 +820,632 @@
       o.start(); o.stop(ac.currentTime+.5);
     }catch(e){}
   }
-  function renderOnField(){
-    var box=$("#onFieldChips"), sub=$("#subLine"), note=$("#benchNote");
-    if(!state.lineup){ box.innerHTML='<span class="hint" style="color:rgba(255,255,255,.7)">Build a lineup on the first tab to see who\'s on.</span>'; sub.innerHTML=""; $("#ofPeriod").textContent=""; note.textContent=""; return; }
-    var lu=state.lineup, pi=Math.min(state.game.period-1, lu.Q-1);
-    $("#ofPeriod").textContent="· Period "+(pi+1);
-    function nm(id){ if(!id) return "—"; var p=state.roster.filter(function(x){return x.id===id;})[0]; return p?p.name:"?"; }
-    var onNow=lu.periods[pi]||[], gkNow=(lu.gk||[])[pi];
-    box.innerHTML=onNow.map(function(id){
-      var isGk=(id===gkNow);
-      var pos=isGk?"GK":(LineupCore.posInPeriod(lu,pi,id)||"·");
-      var s=(sel&&sel.id===id&&sel.where==="field")?" sel":"";
-      return '<button class="jchip'+(isGk?" gk":"")+s+'" data-act="chip" data-where="field" data-id="'+id+'"><span class="jn">'+pos+'</span>'+esc(nm(id))+'</button>';
-    }).join("");
-    // subs vs next period — keeper rows only exist in a keeper format
-    var rows=lu.keeper?'<div class="r"><span class="lab">In goal</span><b>'+(gkNow?esc(nm(gkNow)):"—")+'</b></div>':'';
-    if(pi+1<lu.Q){
-      var nxt=lu.periods[pi+1];
-      var coming=nxt.filter(function(id){return onNow.indexOf(id)<0;}).map(nm);
-      var going=onNow.filter(function(id){return nxt.indexOf(id)<0;}).map(nm);
-      sub.innerHTML=rows+((going.length||coming.length)
-        ? '<div class="r off"><span class="lab">Coming off</span><b>'+(going.length?esc(going.join(", ")):"—")+'</b></div>'
-          +'<div class="r on"><span class="lab">Going on</span><b>'+(coming.length?esc(coming.join(", ")):"—")+'</b></div>'
-        : '<div class="r"><span class="lab">Next period</span>no changes</div>')
-        +(lu.keeper?'<div class="r"><span class="lab">Next keeper</span><b>'+esc(nm((lu.gk||[])[pi+1]))+'</b></div>':'');
-    } else {
-      sub.innerHTML=rows+'<div class="r"><span class="lab">Last period</span>final rotation</div>';
+
+  /* ---------- screen wake lock ---------- */
+  // A sleeping screen kills the period alarm — beep() only fires while the page
+  // is alive. Safari 16.4+ and Chrome both have this; anywhere else it's a
+  // silent no-op. iOS drops the lock on backgrounding without telling us, so it
+  // is re-requested on every return to visible.
+  var wake=null;
+  function wantAwake(){ return !!(state.game.running||lockOn); }
+  async function keepAwake(on){
+    try{
+      if(!navigator.wakeLock) return;
+      if(on && !wake){ wake=await navigator.wakeLock.request("screen"); wake.addEventListener("release",function(){ wake=null; }); }
+      else if(!on && wake){ var w=wake; wake=null; await w.release(); }
+    }catch(e){ wake=null; }
+  }
+  function syncWake(){ keepAwake(wantAwake()); }
+  // The coach locks the phone out of habit, which freezes this page and the
+  // local alarm with it. tick() is wall-clock anchored so the clock itself
+  // catches up, but the whistle was missed — say so on the way back in.
+  var hidWhileRunning=false;
+  document.addEventListener("visibilitychange",function(){
+    if(document.visibilityState!=="visible"){ hidWhileRunning=state.game.running; return; }
+    wake=null; syncWake();
+    if(!hidWhileRunning) return;
+    hidWhileRunning=false;
+    toast(alertsOn
+      ? "Clock caught up. Tap 🔒 Lock instead of locking the phone — the alarm only sounds while the app is awake."
+      : "Clock caught up. Locking the phone silences the alarm — tap 🔒 Lock instead, or turn on 🔔 Wrist alerts.",true);
+  });
+
+  /* ---------- wrist alerts (web push) ---------- */
+  // A locked phone runs none of our JS, so the whistle has to come from the
+  // server: every clock start registers the deadline with the Worker, every
+  // stop cancels it. The push itself carries no payload — sw.js holds the text.
+  var VAPID_PUB="BMGDRavQ7gT3bi95TPOAzA2N-MDyKHKSkLsUUV9w6i5uyDuoFx4FRtDWEGWxxNj4x3hCIGkXwN793rtydRsK6MQ";
+  var alertsOn=false;
+  function b64uToU8(s){
+    var p=(s+"=".repeat((4-s.length%4)%4)).replace(/-/g,"+").replace(/_/g,"/");
+    var raw=atob(p), out=new Uint8Array(raw.length);
+    for(var i=0;i<raw.length;i++) out[i]=raw.charCodeAt(i);
+    return out;
+  }
+  function pushOk(){ return !!(TEAM && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window); }
+  function renderAlertBtn(){
+    var b=$("#alertBtn"); if(!b) return;
+    b.hidden=!pushOk();
+    if(b.hidden) return;
+    b.textContent=alertsOn?"🔔 Wrist alerts on":"🔕 Wrist alerts off";
+    b.setAttribute("aria-pressed",alertsOn?"true":"false");
+  }
+  // Arm or cancel the server-side alarm. Called from startTicker/stopTicker, so
+  // every running-state change funnels through it exactly like the wake lock.
+  function syncAlarm(){
+    if(!pushOk()||!alertsOn) return;
+    var g=state.game;
+    var at=(g.running&&g.secs>0)?nowMs()+g.secs*1000:0;
+    fetch("/api/team/"+encodeURIComponent(TEAM)+"/alarm",{
+      method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({at:at})
+    }).catch(function(){});   // offline: the local alarm still covers the awake case
+  }
+  async function toggleAlerts(){
+    if(!pushOk()) return;
+    var base="/api/team/"+encodeURIComponent(TEAM)+"/push";
+    try{
+      var reg=await navigator.serviceWorker.ready;
+      var sub=await reg.pushManager.getSubscription();
+      if(sub){
+        await fetch(base,{method:"DELETE",headers:{"content-type":"application/json"},
+          body:JSON.stringify({endpoint:sub.endpoint})}).catch(function(){});
+        await sub.unsubscribe();
+        alertsOn=false; renderAlertBtn(); toast("Wrist alerts off");
+        return;
+      }
+      // Must be a direct tap — iOS only shows the permission sheet on a gesture,
+      // and only for a PWA that was added to the Home Screen.
+      var perm=await Notification.requestPermission();
+      if(perm!=="granted"){
+        toast(perm==="denied"
+          ? "Notifications are blocked for this app — turn them back on in Settings."
+          : "Notifications weren't allowed, so alerts stay off.",true);
+        return;
+      }
+      sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64uToU8(VAPID_PUB)});
+      var r=await fetch(base,{method:"POST",headers:{"content-type":"application/json"},
+        body:JSON.stringify({sub:sub.toJSON()})});
+      if(!r.ok) throw new Error((await r.json().catch(function(){return{};})).error||("HTTP "+r.status));
+      alertsOn=true; renderAlertBtn(); syncAlarm();
+      toast("Wrist alerts on — the whistle reaches your watch with the phone locked.",true);
+    }catch(e){
+      alertsOn=false; renderAlertBtn();
+      toast("Couldn't turn on alerts: "+(e&&e.message||e),true);
     }
-    var bench=state.roster.filter(function(p){return p.present && onNow.indexOf(p.id)<0;});
-    note.innerHTML=bench.length
-      ? '<span class="hint">Bench — tap a field player, then a name here to sub. Tap two field players to swap positions.</span><div class="benchchips">'
-        +bench.map(function(p){
-          var s=(sel&&sel.id===p.id&&sel.where==="bench")?" sel":"";
-          return '<button class="jchip bench'+s+'" data-act="chip" data-where="bench" data-id="'+p.id+'">'+esc(p.name)+'</button>';
+  }
+  // The subscription outlives a reload, so trust it rather than a saved flag.
+  // Called from boot(), which is where TEAM finally has a value.
+  function initAlerts(){
+    renderAlertBtn();
+    if(!pushOk()) return;
+    navigator.serviceWorker.ready
+      .then(function(reg){ return reg.pushManager.getSubscription(); })
+      .then(function(s){ alertsOn=!!s&&Notification.permission==="granted"; renderAlertBtn(); })
+      .catch(function(){});
+  }
+
+  /* ---------- pocket lock ---------- */
+  // Explicit, never automatic: the coach taps subs and goals constantly, so a
+  // lock that armed itself on Start would fight them. Armed when the phone goes
+  // in a pocket; the clock underneath runs and still sounds the alarm.
+  var lockOn=false, lockHold=null, lockEl=$("#lockScreen");
+  function paintLock(txt){
+    if(!lockOn||!lockEl) return;
+    var g=state.game;
+    var c=$("#lkClock");
+    c.textContent = txt||mmssTxt(Math.max(0,g.secs));
+    c.className = "lk-clock tnum display"+(g.running?"":" stopped");
+    $("#lkPeriod").textContent = g.onBreak ? (g.breakKind==="half"?"Halftime":"Sub break") : "Period "+g.period+" of "+maxPeriods();
+    $("#lkScore").textContent = g.us+" – "+g.them;
+  }
+  function setLock(on){
+    if(!lockEl) return;
+    lockOn=on;
+    lockEl.hidden=!on;
+    lockEl.classList.remove("holding");
+    clearTimeout(lockHold);
+    paintLock();
+    syncWake();   // stay awake while locked even if the clock is paused
+  }
+  if(lockEl){
+    lockEl.addEventListener("pointerdown",function(){
+      lockEl.classList.add("holding");
+      clearTimeout(lockHold);
+      lockHold=setTimeout(function(){ setLock(false); buzz(40); toast("Unlocked"); },800);
+    });
+    ["pointerup","pointercancel","pointerleave"].forEach(function(ev){
+      lockEl.addEventListener(ev,function(){ clearTimeout(lockHold); lockEl.classList.remove("holding"); });
+    });
+    document.addEventListener("keydown",function(e){ if(lockOn&&e.key==="Escape") setLock(false); });
+  }
+  /* ---------- 1d chip anatomy: this-game credit + season D/F needle ---------- */
+  // Fraction of the period on the clock that has NOT been played yet.
+  //   before kickoff  -> 1 (nothing has run)
+  //   on a break      -> 0 (g.secs is the BREAK's countdown, and the period it
+  //                     belongs to is already over — see curPi())
+  function remFrac(){
+    var g=state.game;
+    if(!g.started) return 1;
+    if(g.onBreak) return 0;
+    return Math.min(1,Math.max(0, g.secs/Math.max(1,state.minsper*60)));
+  }
+  // Periods ACTUALLY PLAYED so far — see LineupCore.playedThrough. The raw app
+  // fracs are what a player is down to play (frac:1 from build time), so the
+  // live period has to be discounted by whatever is still on the clock.
+  function playedSoFar(lu,pi,id){
+    return LineupCore.playedThrough(lu,pi,id,curPi(),remFrac());
+  }
+  // Deliberately NOT elapsed: this backs the "one period in goal each" cap, and
+  // a keeper halfway through their period must already count as capped or the
+  // next-keeper picker would offer them a second one.
+  function keptSoFar(lu,pi,id){
+    var n=0;
+    (lu.app||[]).slice(0,pi+1).forEach(function(es){ es.forEach(function(e){ if(e.id===id&&e.pos==="GK"&&e.frac>1e-9) n+=e.frac; }); });
+    return n;
+  }
+  function isPartial(v){ return Math.abs(v-Math.round(v))>0.04; }
+  // The half pip means "a sub split one of their periods" — a property of the
+  // PLAN, not of the clock. Now that the displayed number is elapsed time, every
+  // chip is fractional mid-period, so testing the displayed value would pip
+  // almost all of them and the signal would carry nothing.
+  function wasSplit(lu,pi,id){
+    var split=false;
+    (lu.app||[]).slice(0,pi+1).forEach(function(es){
+      var n=0; es.forEach(function(e){ if(e.id===id&&e.frac>1e-9) n+=e.frac; });
+      if(n>1e-9 && isPartial(n)) split=true;
+    });
+    return split;
+  }
+  // 2c's balance needle: centre = even season D/F split, left = defense-heavy.
+  function needleHtml(t){
+    var d=(t&&t.D)||0, f=(t&&t.F)||0;
+    var idx=Math.round((1-(d-f)/6)/2*10); idx=Math.max(0,Math.min(10,idx));
+    var segs="";
+    for(var i=0;i<11;i++){ segs+='<i class="'+(i===idx?"mark":"")+'"></i>'; }
+    return '<span class="ndl"><b class="d">D</b><span class="track">'+segs+'</span><b class="f">F</b></span>';
+  }
+  // "1.7p / 17m" — both numbers are THIS GAME (playedSoFar reads lu.app, the
+  // per-game ledger). The season figure on a chip is the D/F needle, nothing
+  // else. Minutes are here because a coach thinks in minutes on the sideline
+  // and periods only when checking the guide's 3-of-4 rule.
+  function ppHtml(v,split){
+    return '<span class="pp" title="Played this game">'
+      +(split?'<span class="half"></span>':'')
+      +'<b>'+r1(v)+'p</b><i>'+Math.round(v*state.minsper)+'m</i></span>';
+  }
+
+  // 1 col / 2 col is a device preference, not team state (1d port note).
+  function loadUI(){ try{ return JSON.parse(localStorage.getItem(BASE+":ui"))||{}; }catch(e){ return {}; } }
+  var uiCols=(loadUI().cols===2)?2:1;
+  function setCols(n){
+    uiCols=n;
+    try{ var u=loadUI(); u.cols=n; localStorage.setItem(BASE+":ui",JSON.stringify(u)); }catch(e){}
+    renderOnField();
+  }
+
+  var nkOpen=false;
+  function renderOnField(){
+    var box=$("#onFieldChips"), sub=$("#subLine"), note=$("#benchNote"), hintEl=$("#fmHint"), fmtChip=$("#fmtChip");
+    if(!state.lineup){
+      box.className="onfield";
+      box.innerHTML='<span class="hint" style="color:rgba(255,255,255,.7)">Build a lineup on the first tab to see who\'s on.</span>';
+      sub.innerHTML=""; note.innerHTML=""; if(hintEl) hintEl.hidden=true; if(fmtChip) fmtChip.hidden=true;
+      return;
+    }
+    // api = periods actually played (what the "1.5p" numbers count).
+    // pi  = the period being shown and edited — the next one during a break.
+    var lu=state.lineup, brk=onBreakNext(), api=curPi(), pi=editPi(), sofar=api+1;
+    function nm(id){ if(!id) return "—"; var p=byId(id); return p?p.name:"?"; }
+    var onNow=lu.periods[pi]||[], gkNow=(lu.gk||[])[pi];
+    var posTot=LineupCore.positionTotals(lu,state.posTotals);
+
+    if(fmtChip){ fmtChip.hidden=false; $("#fmtLabel").textContent=lu.keeper?"With keeper":"No keeper"; }
+    // no #colSeg in the markup any more — harmless if the toggle is put back
+    $$("#colSeg button").forEach(function(b){ b.setAttribute("aria-pressed",String(+b.dataset.n===uiCols)); });
+    var titleEl=$("#fmTitle");
+    if(titleEl) titleEl.textContent = brk ? "Starting period "+(pi+1) : "On the field";
+    var panel=$(".field-mini"); if(panel) panel.classList.toggle("break",brk);
+    // Fixed-length copy, no names: the hint sits above the chips, so a line
+    // break here shoves the whole field panel down mid-tap.
+    if(hintEl){
+      hintEl.hidden=false;
+      hintEl.classList.toggle("armed",!!sel);
+      hintEl.textContent = sel
+        ? (brk ? "Tap a teammate to swap, or a bench name to sub." : "Tap a teammate to swap, or a bench name to sub.")
+        : (brk ? "This is who starts the next period — change it now, while you have them."
+               : "Tap a player, then tap who takes their place.");
+    }
+
+    // Next sub, computed from time actually played (1d port note): longest on
+    // goes off — keeper excluded, they finish the period in goal — and the
+    // least-played bench player comes on.
+    var offSorted=onNow.filter(function(id){ return id!==gkNow; })
+      .map(function(id){ return {id:id, v:playedSoFar(lu,api,id)}; })
+      .sort(function(a,b){ return b.v-a.v || nm(a.id).localeCompare(nm(b.id)); });
+    var benchSorted=state.roster.filter(function(p){ return p.present && onNow.indexOf(p.id)<0; })
+      .map(function(p){ return {id:p.id, v:playedSoFar(lu,api,p.id)}; })
+      .sort(function(a,b){ return a.v-b.v || nm(a.id).localeCompare(nm(b.id)); });
+    var nPairs=Math.min(offSorted.length,benchSorted.length);
+    var offList=offSorted.slice(0,nPairs), onList=benchSorted.slice(0,nPairs);
+    var offIds=offList.map(function(x){ return x.id; });
+
+    function selCls(id,where){ return (sel&&sel.id===id&&sel.where===where)?" sel":""; }
+    function posOf(id){ return id===gkNow?"GK":(LineupCore.posInPeriod(lu,pi,id)||"F"); }
+    function chip1(id){
+      var st=(state.game.playerStats||{})[id]||{goals:0,sog:0};
+      return '<div class="jrow">'
+        +'<button class="jchip'+selCls(id,"field")+'" data-act="chip" data-where="field" data-id="'+id+'">'
+        +(offIds.indexOf(id)>=0?'<span class="dot-off"></span>':'')
+        +'<span class="nm">'+esc(nm(id))+'</span>'
+        +needleHtml(posTot[id])
+        +ppHtml(playedSoFar(lu,api,id),wasSplit(lu,api,id))
+        +'</button>'
+        +'<span class="jstat">'
+        +'<button class="statbtn" data-act="goal" data-id="'+id+'" title="Goal">⚽<b>'+st.goals+'</b></button>'
+        +'<button class="statbtn" data-act="sog" data-id="'+id+'" title="Shot on goal">🥅<b>'+st.sog+'</b></button>'
+        +'</span></div>';
+    }
+    function chip2(id){
+      var pos=posOf(id);
+      return '<button class="jchip'+selCls(id,"field")+'" data-act="chip" data-where="field" data-id="'+id+'">'
+        +'<span class="rail '+pos.toLowerCase()+'">'+pos+'</span>'
+        +'<span class="col"><span class="nm">'+esc(nm(id))+'</span>'
+        +'<span class="pl">'+(offIds.indexOf(id)>=0?'<span class="dot-off"></span>':'')+r1(playedSoFar(lu,api,id))+' of '+sofar+'</span></span>'
+        +'</button>';
+    }
+    if(uiCols===1){
+      box.className="onfield";
+      var groups={GK:[],D:[],F:[]};
+      onNow.forEach(function(id){ groups[posOf(id)].push(id); });
+      box.innerHTML=["GK","D","F"].filter(function(k){ return groups[k].length; }).map(function(k){
+        return '<div class="posrow"><div class="rail '+k.toLowerCase()+'">'+k+'</div><div class="stack">'
+          +groups[k].map(chip1).join("")+'</div></div>';
+      }).join("");
+    } else {
+      box.className="onfield cols2";
+      box.innerHTML=onNow.map(chip2).join("");
+    }
+
+    var rows;
+    if(brk){
+      // The break briefing: what actually changes between the period that just
+      // ended and the one about to start. This is the list read out to the team.
+      var prev=lu.periods[pi-1]||[], gkPrev=(lu.gk||[])[pi-1];
+      var comingOff=prev.filter(function(id){ return onNow.indexOf(id)<0; });
+      var comingOn=onNow.filter(function(id){ return prev.indexOf(id)<0; });
+      var kChange=lu.keeper && gkNow && gkNow!==gkPrev;
+      var line=function(cls,lab,ids){
+        return '<div class="chg-row '+cls+'"><span class="lab">'+lab+'</span><b>'
+          +(ids.length?ids.map(function(id){ return esc(nm(id)); }).join(", "):"nobody")+'</b></div>';
+      };
+      rows='<div class="sph">Changes for period '+(pi+1)+'</div><div class="changes">'
+        +line("off","Coming off",comingOff)
+        +line("on","Going on",comingOn)
+        +(kChange?'<div class="chg-row gk"><span class="lab">In goal</span><b>'+esc(nm(gkNow))
+          +'</b><span class="was">'+(gkPrev?"was "+esc(nm(gkPrev)):"")+'</span></div>':"")
+        +'</div>'
+        +'<div class="why">'+(comingOff.length||comingOn.length||kChange
+          ? "Tell them now — the whistle does not wait. Tap any two players to change this before the period starts."
+          : "Same eleven back out. Tap any two players to change that before the period starts.")+'</div>';
+    } else {
+      // The top three swaps, ranked — a coach glances once and reads them off.
+      var pairs=[]; for(var pz=0; pz<nPairs && pz<3; pz++){ pairs.push([offList[pz],onList[pz]]); }
+      rows='<div class="sph">Next subs — in priority order</div>'
+        +(pairs.length
+          ? '<div class="subpairs">'+pairs.map(function(pr,i){
+              return '<div class="sp"><span class="rk">'+(i+1)+'</span>'
+                +'<span class="sd off"><span class="who">'+esc(nm(pr[0].id))+'</span><span class="pv">'+r1(pr[0].v)+'p</span></span>'
+                +'<span class="ar">→</span>'
+                +'<span class="sd on"><span class="who">'+esc(nm(pr[1].id))+'</span><span class="pv">'+r1(pr[1].v)+'p</span></span>'
+                +'</div>';
+            }).join("")+'</div>'
+          : '<div class="why">No swaps available — the bench is empty.</div>')
+        +'<div class="why">Longest on the field goes off; least played comes on.'
+        +(lu.keeper&&gkNow?" "+esc(nm(gkNow))+" stays in goal until the period ends.":"")+'</div>';
+    }
+    // Next keeper is an editable button + collapsed picker (1d port note:
+    // picking writes lu.gk[pi+1] — a future period, no credit change).
+    // Hidden during a break: the keeper for the period starting is in the
+    // changes list above, and a second keeper row would read as the same thing.
+    if(lu.keeper && !brk && pi+1<lu.Q){
+      var nk=(lu.gk||[])[pi+1];
+      rows+='<button class="nk-btn" data-act="nk-toggle"><span class="lab">Next keeper</span><b>'+esc(nm(nk))+'</b><span class="chg">Change ▾</span></button>';
+      if(nkOpen){
+        rows+='<div class="nk-pick">'+(lu.periods[pi+1]||[]).map(function(id){
+          var used=keptSoFar(lu,api,id), capped=used>=0.999&&id!==nk;
+          if(capped) return '<span class="kchip capped">'+esc(nm(id))+'<span class="lb">capped</span></span>';
+          return '<button class="kchip'+(id===nk?" sel":"")+'" data-act="nk-pick" data-id="'+id+'">'+esc(nm(id))+'<span class="lb">'+r1(used)+' in goal</span></button>';
         }).join("")+'</div>'
-      : "Everyone's on the field this period. Tap two players to swap positions.";
-
-    $("#subOut").innerHTML=onNow.map(function(id){ return '<option value="'+id+'">'+esc(nm(id))+(id===gkNow?" (GK)":"")+'</option>'; }).join("");
-    $("#subIn").innerHTML=bench.map(function(p){ return '<option value="'+p.id+'">'+esc(p.name)+'</option>'; }).join("");
-    $("#subNow").hidden = !bench.length || !onNow.length;
-
-    // Keeper swap picker (req 1) — its own card, because #subNow hides whenever
-    // there's no bench and a keeper swap needs none (finding 3.4).
-    var gkCard=$("#gkCard");
-    if(gkCard){
-      gkCard.hidden = !lu.keeper || !onNow.length || !gkNow;
-      if(!gkCard.hidden){
-        // The per-game number the guide caps at one — not career totals (finding 1.2).
-        $("#gkSel").innerHTML=onNow.filter(function(id){ return id!==gkNow; }).map(function(id){
-          return '<option value="'+id+'">'+esc(nm(id))+" — "+r1(lu.gkActual[id]||0)+" in goal this game</option>";
-        }).join("");
+        +'<div class="nk-note">One period in goal each — anyone already at 1.0 is capped and greyed. Picking here only sets the next period; tap the GK chip and a field player to change the keeper right now.</div>';
       }
     }
+    sub.innerHTML=rows;
+
+    if(benchSorted.length){
+      var most=benchSorted[benchSorted.length-1].v, rec=benchSorted[0];
+      note.innerHTML='<div class="bhrow"><span class="bh">'+(brk?"Sitting out period "+(pi+1):"Bench")+'</span>'
+        +'<span class="rec">↑ '+esc(nm(rec.id))+' has played '+r1(rec.v)+' of '+sofar
+        +(brk?" — swap them in now if that is not right.":" — put them on next.")+'</span></div>'
+        +'<div class="benchchips">'+benchSorted.map(function(b,i){
+          // dot-ON, not dot-off: on the field the dot means "next off" (cone),
+          // on the bench it means "next on" (green). Same colour read as the
+          // same meaning in two places where the meanings are opposite.
+          return '<button class="jchip bench'+selCls(b.id,"bench")+'" data-act="chip" data-where="bench" data-id="'+b.id+'">'
+            +(i===0&&b.v<most-1e-9?'<span class="dot-on"></span>':'')
+            +'<span class="nm">'+esc(nm(b.id))+'</span>'
+            +needleHtml(posTot[b.id])
+            +ppHtml(b.v,wasSplit(lu,api,b.id))
+            +'</button>';
+        }).join("")+'</div>';
+    } else {
+      note.innerHTML='<span class="bh">Everyone\'s on the field this period.</span> Tap two players to swap positions.';
+    }
+  }
+
+  // Port note (1d): the keeper picker writes lu.gk[pi+1] — a future period,
+  // so no played credit moves; only the plan and its projection ledger do.
+  function pickNextKeeper(id){
+    var lu=state.lineup; if(!lu||!lu.keeper) return;
+    var pi=curPi(); if(pi+1>=lu.Q) return;
+    var old=lu.gk[pi+1];
+    if(old===id||lu.periods[pi+1].indexOf(id)<0){ nkOpen=false; renderOnField(); return; }
+    lu.gk[pi+1]=id;
+    if(old) lu.gkActual[old]=(lu.gkActual[old]||0)-1;
+    lu.gkActual[id]=(lu.gkActual[id]||0)+1;
+    var es=(lu.app||[])[pi+1]||[], eOld=null, eNew=null;
+    es.forEach(function(e){ if(e.id===old&&e.pos==="GK") eOld=e; if(e.id===id&&e.pos!=="GK") eNew=e; });
+    if(eOld) eOld.pos=eNew?eNew.pos:"D";   // the old keeper takes the new one's spot
+    if(eNew) eNew.pos="GK";
+    lu.handEdited=true;
+    logEvent("keeper_next",{out:old,"in":id,forPeriod:pi+2},id);
+    nkOpen=false;
+    save(); renderLineup(); renderOnField();
+    toast(nameOf(id)+" set to keep period "+(pi+2));
+  }
+
+  /* ---------- clock edit: tap → confirm → set-clock sheet (1d) ---------- */
+  var clkStep=null, clkDraft=0;
+  function drawClkDialog(){
+    var dlg=$("#clkDialog"); if(!dlg) return;
+    var cur=mmssTxt(state.game.secs);
+    if(clkStep==="confirm"){
+      dlg.innerHTML='<h4>Edit the clock?</h4>'
+        +'<p>The clock is what credits playing time. An edit is logged as a correction at '+cur+' and can be undone from Fix a mistake.</p>'
+        +'<div class="btns"><button class="btn ghost" data-act="clk-cancel">Cancel</button><button class="btn cone" data-act="clk-yes">Yes, edit</button></div>';
+    } else {
+      dlg.innerHTML='<div class="hd"><h4>Set the clock</h4><span class="was tnum">was '+cur+'</span></div>'
+        +'<div class="clock-big tnum draft">'+mmssTxt(clkDraft)+'</div>'
+        +'<div class="steps">'
+        +'<div><span class="lab">Minutes</span><div class="pair"><button data-act="clk-d" data-d="-60">−</button><button data-act="clk-d" data-d="60">+</button></div></div>'
+        +'<div><span class="lab">Seconds</span><div class="pair"><button data-act="clk-d" data-d="-10">−</button><button data-act="clk-d" data-d="10">+</button></div></div>'
+        +'</div>'
+        +'<p>Saving pauses the clock at '+mmssTxt(clkDraft)+'. Playing time already credited is not changed.</p>'
+        +'<div class="btns"><button class="btn ghost" data-act="clk-cancel">Cancel</button><button class="btn" style="flex:2" data-act="clk-save">Save clock</button></div>';
+    }
+  }
+  function openClockEdit(){
+    var dlg=$("#clkDialog"); if(!dlg||!dlg.showModal) return;
+    clkStep="confirm"; drawClkDialog();
+    if(!dlg.open) dlg.showModal();
+  }
+  function closeClk(){ var dlg=$("#clkDialog"); clkStep=null; if(dlg&&dlg.open) dlg.close(); }
+  function saveClock(){
+    var g=state.game, from=Math.max(0,g.secs);
+    g.secs=clkDraft; g.running=false; stopTicker(); if(g.started) g.stoppedAt=nowMs();
+    logEvent("clock_set",{from:from,to:clkDraft});
+    closeClk(); save(); renderGame();
+    toast("Clock set to "+mmssTxt(clkDraft)+" — paused");
+  }
+
+  /* ---------- Fix a mistake (3a): corrections, never deletions ---------- */
+  var fixOpen=null;
+  function fixLabel(ev){
+    var d=ev.detail||{};
+    if(ev.kind==="goal") return d.side==="us"?(d.playerId?nameOf(d.playerId)+" scores":"Goal — "+(state.team||"us")):"Goal — Visitors";
+    if(ev.kind==="sog") return nameOf(d.playerId)+" — shot on goal";
+    if(ev.kind==="sub") return nameOf(d["in"])+" on for "+nameOf(d.out);
+    if(ev.kind==="keeper") return nameOf(d["in"])+" into goal";
+    if(ev.kind==="clock_set") return "Clock set to "+mmssTxt(d.to||0);
+    if(ev.kind==="format") return "Format — no keeper";
+    return ev.kind;
+  }
+  function fixConseq(ev){
+    var g=state.game, d=ev.detail||{};
+    if(ev.kind==="goal"){
+      var us=g.us-(d.side==="us"?1:0), them=g.them-(d.side==="them"?1:0);
+      return "Score goes back to "+Math.max(0,us)+"–"+Math.max(0,them)+".";
+    }
+    if(ev.kind==="sog"){
+      var sc=((g.playerStats||{})[d.playerId]||{}).sog||0;
+      return nameOf(d.playerId)+"'s shot count goes back to "+Math.max(0,sc-1)+". The score is not affected.";
+    }
+    if(ev.kind==="sub") return nameOf(d.out)+" goes back on. "+nameOf(d["in"])+"'s "+r1(d.frac||0)+" of a period returns to "+nameOf(d.out)+".";
+    if(ev.kind==="keeper") return nameOf(d.out)+" goes back in goal; the goal time returns with them.";
+    if(ev.kind==="clock_set") return "Clock goes back to "+mmssTxt(d.from||0)+", paused.";
+    if(ev.kind==="format") return nameOf(d.off)+" comes back on"+(d.gk?" and "+nameOf(d.gk)+" goes back in goal":"")+".";
+    return "";
+  }
+  function renderFixCard(){
+    var card=$("#fixCard"); if(!card) return;
+    var g=state.game, lu=state.lineup, rec=g.recent||[];
+    var show=!!lu&&(g.started||rec.length>0);
+    card.hidden=!show; if(!show) return;
+    var qf=[];
+    if(g.started&&!g.running&&g.stoppedAt&&g.secs>0){
+      var since=Math.min(Math.round((nowMs()-g.stoppedAt)/1000),Math.max(0,g.secs));
+      if(since>=30) qf.push('<button data-act="fix-addback"><span>Clock was stopped during play</span><span class="do">count '+mmssTxt(since)+' as played</span></button>');
+    }
+    qf.push('<button data-act="clock-edit"><span>Clock is wrong — ran through a break, or off a bit</span><span class="do">set the clock</span></button>');
+    if(g.started&&g.period>1) qf.push('<button data-act="fix-period"><span>Wrong period showing</span><span class="do">set to '+(g.period-1)+'</span></button>');
+    // Deliberately last and plainly worded — a goal logged late (at the break,
+    // or after full time) is the rare case, not a sideline action.
+    if((g.goals||[]).length) qf.push('<button data-act="goal-fixtime"><span>A goal is logged at the wrong time</span><span class="do">pick the goal</span></button>');
+    $("#quickFixes").innerHTML=qf.join("");
+    $("#recentHead").hidden=!rec.length;
+    $("#recentFixes").innerHTML=rec.map(function(ev,i){
+      var open=fixOpen===i;
+      return '<div class="logrow'+(open?" open":"")+'">'
+        +'<button class="loghead" data-act="fix-open" data-i="'+i+'"><span><span class="tnum" style="color:var(--muted);margin-right:8px">P'+ev.period+' · '+mmssTxt(ev.secs)+'</span>'+esc(fixLabel(ev))+'</span><span class="undo">Undo</span></button>'
+        +(open?'<div class="fixbody"><div class="conseq">'+esc(fixConseq(ev))+'</div><div class="btns">'
+          +'<button class="btn cone" data-act="fix-undo" data-i="'+i+'">Undo this</button>'
+          +'<button class="btn ghost" style="flex:0 0 auto" data-act="fix-open" data-i="'+i+'">Keep it</button>'
+          +'</div></div>':'')
+        +'</div>';
+    }).join("");
+  }
+  function undoFix(i){
+    var g=state.game, lu=state.lineup, rec=g.recent||[], ev=rec[i];
+    if(!ev||!lu) return;
+    var d=ev.detail||{}, ok=false, msg="";
+    if(ev.kind==="goal"){
+      if(g[d.side]>0){
+        // playerId rides along so the correcting row names the scorer — the
+        // season rollup nets goals by SUM(detail.d) and can't match a NULL.
+        // scoreChange only credits playerStats when d>0, so this can't double-count.
+        scoreChange(d.side,-1,d.playerId,d.assistId);
+        if(d.playerId){ var ps=(g.playerStats||{})[d.playerId]; if(ps&&ps.goals>0) ps.goals--; }
+        if(d.assistId){ var as=(g.playerStats||{})[d.assistId]; if(as&&as.assists>0) as.assists--; }
+        // keep the goal list in step — it is what the +/− modals read from
+        if(ev.id) g.goals=(g.goals||[]).filter(function(x){ return x.evId!==ev.id; });
+        ok=true; msg="Goal removed — "+g.us+"–"+g.them;
+      }
+      else msg="That side is already at 0.";
+    } else if(ev.kind==="sog"){
+      var ss=(g.playerStats||{})[d.playerId];
+      if(ss&&ss.sog>0){
+        ss.sog--;
+        logEvent("sog",{playerId:d.playerId,correction:true},d.playerId);
+        ok=true; msg="Shot removed — "+nameOf(d.playerId)+" on "+ss.sog;
+      } else msg="No shots left to remove for "+nameOf(d.playerId)+".";
+    } else if(ev.kind==="sub"){
+      if(LineupCore.applySub(lu,ev.period-1,d["in"],d.out,d.frac||0)){
+        logEvent("sub",{out:d["in"],"in":d.out,frac:d.frac,correction:true},d.out);
+        queueAppearances(ev.period); ok=true; msg="Sub undone — "+nameOf(d.out)+" back on";
+      } else msg="Can't undo that sub — the field has changed since.";
+    } else if(ev.kind==="keeper"){
+      if(lu.gk[ev.period-1]===d["in"]&&d.frac!=null&&LineupCore.applyKeeperSwap(lu,ev.period-1,d.out,d.frac)){
+        logEvent("keeper",{out:d["in"],"in":d.out,frac:d.frac,correction:true},d.out);
+        queueAppearances(ev.period); ok=true; msg=nameOf(d.out)+" back in goal";
+      } else msg="Can't undo that keeper change — goal has changed since.";
+    } else if(ev.kind==="clock_set"){
+      g.secs=d.from||0; g.running=false; stopTicker(); if(g.started) g.stoppedAt=nowMs();
+      logEvent("clock_set",{from:d.to,to:g.secs,correction:true});
+      ok=true; msg="Clock back to "+mmssTxt(g.secs);
+    } else if(ev.kind==="format"){
+      ok=undoFormatSwitch(ev);
+      msg=ok?"Keeper format restored":"A format change can only be undone in the same period.";
+    }
+    if(ok){ rec.splice(i,1); fixOpen=null; save(); renderRoster(); renderLineup(); renderGame(); }
+    toast(msg,ok);
+  }
+  function fixAddBack(){
+    var g=state.game; if(!g.stoppedAt||g.running) return;
+    var since=Math.min(Math.round((nowMs()-g.stoppedAt)/1000),Math.max(0,g.secs));
+    if(since<1) return;
+    ask({title:"Count "+mmssTxt(since)+" as played?",
+      body:"That time comes off period "+g.period+" and is credited to whoever is on the field. The clock restarts.",
+      ok:"Count it as played", danger:true}).then(function(ok){
+      if(!ok) return;
+      var from=Math.max(0,g.secs);
+      g.secs=Math.max(0,g.secs-since);   // that time was played, so it comes off the period
+      logEvent("clock_set",{from:from,to:g.secs,played:since});
+      if(g.secs>0){ toggleTimer(); } else { g.stoppedAt=nowMs(); save(); renderGame(); }
+      toast("Counted "+mmssTxt(since)+" as played");
+    });
+  }
+  function fixPeriodBack(){
+    var g=state.game; if(g.period<=1) return;
+    ask({title:"Go back to period "+(g.period-1)+"?",
+      body:"The clock resets to "+mmssTxt(state.minsper*60)+" and stops. Playing time already credited is not changed.",
+      ok:"Go back a period", danger:true}).then(function(ok){
+      if(!ok) return;
+      g.period--; g.running=false; stopTicker(); g.secs=state.minsper*60; g.stoppedAt=0;
+      logEvent("period",{fixedTo:g.period,correction:true});
+      save(); renderGame();
+      toast("Back to period "+g.period);
+    });
+  }
+
+  /* ---------- game format — t5: keeper or no keeper, mid-game ---------- */
+  var fmtOpen=false, fmtMode=null, fmtOffId=null;
+  function renderFmtCard(){
+    var card=$("#fmtCard"); if(!card) return;
+    var lu=state.lineup, g=state.game;
+    var show=fmtOpen&&!!lu;
+    card.hidden=!show; if(!show) return;
+    var pi=curPi(), gkNow=(lu.gk||[])[pi];
+    $("#fmtWhen").textContent="Period "+g.period+" · "+mmssTxt(g.secs);
+    var current=lu.keeper?"keeper":"none", mode=fmtMode||current;
+    $("#fmtBtnKeeper").setAttribute("aria-pressed",String(mode==="keeper"));
+    $("#fmtBtnNone").setAttribute("aria-pressed",String(mode==="none"));
+    var html="";
+    if(mode===current){
+      html='<p class="lead" style="margin:0">'+(lu.keeper
+        ? esc(nameOf(gkNow))+" is in goal this period."+((lu.gk||[])[pi+1]?" "+esc(nameOf(lu.gk[pi+1]))+" is set for the next one.":"")
+        : "Everyone plays out — time balances across D and F only.")+'</p>';
+    } else if(mode==="none"){
+      // Switching off the keeper takes a player off the field, so the sheet
+      // names the consequences and makes you pick who sits before it commits.
+      var newN=lu.N-1, nD=LineupCore.posSplit(newN,false), nF=newN-nD;
+      var chips=(lu.periods[pi]||[]).map(function(id){ return {id:id, v:playedSoFar(lu,pi,id)}; })
+        .sort(function(a,b){ return b.v-a.v || nameOf(a.id).localeCompare(nameOf(b.id)); });
+      html='<div class="fmt-consec"><div class="hd">Switching now, at '+mmssTxt(g.secs)+' of period '+g.period+'</div>'
+        +(gkNow?'<div>'+esc(nameOf(gkNow))+' comes out of goal and keeps the time already credited there.</div>':'')
+        +'<div>The field becomes '+newN+' out — '+nD+' D · '+nF+' F — so one player goes to the bench and starts earning bench time.</div>'
+        +'<div>Recorded as “Format — no keeper” and undoable from Fix a mistake.</div></div>'
+        +'<div class="fmt-who">Who goes to the bench — most played first</div>'
+        +'<div class="fmt-off">'+chips.map(function(c){
+          return '<button class="'+(fmtOffId===c.id?"sel":"")+'" data-act="fmt-off" data-id="'+c.id+'">'
+            +(c.id===gkNow?'<span class="gkb">GK</span>':'')
+            +esc(nameOf(c.id))+'<span class="lb">'+r1(c.v)+'p</span></button>';
+        }).join("")+'</div>'
+        +'<div class="fmt-apply"><button class="btn ghost" style="flex:0 0 auto" data-act="fmt-cancel">Cancel</button>'
+        +(fmtOffId
+          ?'<button class="btn cone" style="flex:1" data-act="fmt-apply">Switch now — '+esc(nameOf(fmtOffId))+' to the bench</button>'
+          :'<span class="wait">Pick who goes to the bench</span>')
+        +'</div>';
+    } else {
+      html='<p class="lead" style="margin:0 0 12px">Switching back to a keeper mid-game isn\'t built yet — if the referee turns up, rebuild the lineup on the Roster tab.</p>'
+        +'<div class="fmt-apply"><button class="btn ghost" style="flex:0 0 auto" data-act="fmt-cancel">Close</button></div>';
+    }
+    $("#fmtBody").innerHTML=html;
+  }
+  function applyNoKeeper(){
+    var lu=state.lineup, g=state.game; if(!lu||!lu.keeper||!fmtOffId) return;
+    var pi=curPi(), frac=Math.min(1,Math.max(0,g.secs/Math.max(1,state.minsper*60)));
+    var res=LineupCore.applyFormatOff(lu,pi,fmtOffId,frac);
+    if(!res){ toast("Couldn't switch — try again"); return; }
+    redrawFuture(lu,pi,lu.N-1,false);
+    logEvent("format",{keeper:false,off:fmtOffId,offPos:res.offPos,gk:res.gk,frac:Math.round(frac*1000)/1000},fmtOffId);
+    var offName=nameOf(fmtOffId);
+    fmtOpen=false; fmtMode=null; fmtOffId=null;
+    save(); renderRoster(); renderLineup(); renderGame();
+    buzz(40);
+    toast("No keeper — "+offName+" to the bench, "+lu.N+" on the field",true);
+  }
+  function undoFormatSwitch(ev){
+    var lu=state.lineup, g=state.game, d=ev.detail||{};
+    if(!lu||lu.keeper||ev.period!==g.period) return false;
+    var pi=curPi();
+    if(!LineupCore.applyFormatOn(lu,pi,d.off,d.offPos||"D",d.gk||null,d.frac||0)) return false;
+    redrawFuture(lu,pi,lu.N+1,!!d.gk);
+    logEvent("format",{keeper:true,correction:true});
+    return true;
+  }
+  function presentIdsByOwed(lu){
+    return state.roster.filter(function(p){ return p.present; }).map(function(p){ return p.id; })
+      .sort(function(a,b){ return totPlayed(lu,a)-totPlayed(lu,b); });
+  }
+  // Redraw the unplayed periods at a new field size / keeper setting, with the
+  // same tally discipline buildLineup uses.
+  function redrawFuture(lu,pi,N,keeper){
+    tally(lu,pi+1,-1);
+    lu.periods.length=pi+1; lu.gk.length=pi+1; (lu.app=lu.app||[]).length=pi+1;
+    LineupCore.buildPeriods(lu,presentIdsByOwed(lu),{keep:pi+1,Q:lu.Q,N:N,keeper:keeper,kept:state.kept,posTotals:state.posTotals});
+    tally(lu,pi+1,1);
+    lu.N=N; lu.keeper=keeper; lu.handEdited=true;
+    state.onfield=N;
+    var of=$("#onfield"); if(of) of.value=N;
   }
 
   /* ---------- events ---------- */
@@ -510,14 +1453,40 @@
     var t=e.target.closest("[data-act]"); if(!t) return;
     var act=t.dataset.act;
     if(act==="add-player"){ addPlayer(); }
-    else if(act==="del-player"){ var dp=byId(t.dataset.id); if(dp && confirm("Remove "+dp.name+" from the roster? This can't be undone.")){ state.roster=state.roster.filter(function(p){return p.id!==t.dataset.id;}); save(); renderRoster(); refreshLineup(); } }
-    else if(act==="toggle-present"){ var p=byId(t.dataset.id); if(p){p.present=!p.present; save(); renderRoster(); refreshLineup();} }
-    else if(act==="build-lineup"){ syncSettings(true); if(buildLineup(false,false)) toast("Lineup ready — check Game Day"); }
+    else if(act==="del-player"){
+      var dp=byId(t.dataset.id), dpid=t.dataset.id;
+      if(dp) ask({title:"Remove "+dp.name+"?", body:"They come off the roster for good. This can't be undone.",
+        ok:"Remove "+dp.name, danger:true}).then(function(ok){
+        if(!ok) return;
+        state.roster=state.roster.filter(function(p){ return p.id!==dpid; });
+        save(); renderRoster(); refreshLineup();
+      });
+    }
+    else if(act==="toggle-present"){
+      var p=byId(t.dataset.id);
+      if(p){
+        if(p.present){ p.present=false; p.late=true; }
+        else if(p.late){ p.late=false; }
+        else { p.present=true; p.late=false; }
+        save(); renderRoster(); refreshLineup();
+      }
+    }
+    else if(act==="build-lineup"){
+      syncSettings(true);
+      var bg=state.game, run=function(){ if(buildLineup(false,false)) toast("Lineup ready — check Game Day"); };
+      if(state.lineup && (bg.period>1||bg.us||bg.them)){
+        ask({title:"Start a new game?", body:"The score and period reset.\n\nTo redraw this game's sheet instead, cancel and use ↻ Reshuffle.",
+          ok:"Start new game", danger:true}).then(function(ok){ if(ok) run(); });
+      } else run();
+    }
     else if(act==="reshuffle"){ syncSettings(true); buildLineup(true,true); }
     else if(act==="print-lineup"){ printPanel("p-lineup"); }
     else if(act==="add-drill"){ state.practice.push({id:t.dataset.id, mins:drill(t.dataset.id).mins}); save(); renderPractice(); toast("Added to practice plan"); }
     else if(act==="rm-drill"){ state.practice.splice(+t.dataset.i,1); save(); renderPractice(); }
     else if(act==="mv"){ moveDrill(+t.dataset.i,+t.dataset.d); }
+    else if(act==="practice-start"){ practiceStart(); }
+    else if(act==="practice-next"){ practiceNext(); }
+    else if(act==="practice-reset"){ practiceReset(); }
     else if(act==="template-practice"){ templatePractice(); }
     else if(act==="clear-practice"){ state.practice=[]; save(); renderPractice(); }
     else if(act==="print-practice"){ printPanel("p-practice"); }
@@ -528,13 +1497,70 @@
       var card=document.getElementById("drill-"+t.dataset.id);
       if(card) card.scrollIntoView({block:"start"});
     }
-    else if(act==="score"){ scoreChange(t.dataset.side,+t.dataset.d); }
+    else if(act==="ask-yes"){ askYes(); }
+    else if(act==="ask-no"){ askClose(askIsText?null:false); }
+    else if(act==="toast-clear"){ clearToasts(); }
+    else if(act==="go-live"){ $('.tab[data-tab="game"]').click(); }
+    else if(act==="score"){ scoreTap(t.dataset.side,+t.dataset.d); }
+    else if(act==="goal"){ openGoalDialog("assist",{side:"us",scorerId:t.dataset.id}); }
+    else if(act==="goal-pick"){
+      if(gd.step==="scorer"){ gd.scorerId=t.dataset.id; gd.step="assist"; drawGoalDialog(); }
+      else { gd.assistId=t.dataset.id; commitGoal(); }
+    }
+    else if(act==="goal-skip"){
+      if(gd.step==="scorer"){ gd.scorerId=null; gd.step="assist"; drawGoalDialog(); }
+      else { gd.assistId=null; commitGoal(); }
+    }
+    else if(act==="goal-del"){ removeGoal(+t.dataset.i); }
+    else if(act==="goal-dec"){
+      var sd=gd.side;
+      ask({title:"Take one goal off the "+(sd==="us"?(state.team||"our"):"visitors'")+" score?",
+        body:"No player record changes — use this only for a goal that was never attributed.",
+        ok:"Take one off", danger:true}).then(function(ok){
+        if(!ok) return;
+        closeGoal(); scoreChange(sd,-1); renderGame();
+      });
+    }
+    else if(act==="goal-time"){
+      var go=(state.game.goals||[])[+t.dataset.i]||{};
+      gd.step="time"; gd.idx=+t.dataset.i; gd.period=go.period||1; gd.secs=go.secs||0;
+      drawGoalDialog();
+    }
+    else if(act==="gt-p"){ gd.period=Math.max(1,Math.min(maxPeriods(),gd.period+(+t.dataset.d))); drawGoalDialog(); }
+    else if(act==="gt-s"){ gd.secs=Math.max(0,Math.min(3599,gd.secs+(+t.dataset.d))); drawGoalDialog(); }
+    else if(act==="gt-save"){ saveGoalTime(); }
+    else if(act==="goal-cancel"){ closeGoal(); }
+    else if(act==="goal-fixtime"){ openGoalDialog("remove",{side:"us"}); }
+    else if(act==="sog"){ sogTap(t.dataset.id); }
     else if(act==="timer-toggle"){ toggleTimer(); }
+    else if(act==="lock-on"){ setLock(true); }
+    else if(act==="alerts"){ toggleAlerts(); }
     else if(act==="timer-reset"){ resetTimer(); }
     else if(act==="period-next"){ nextPeriod(); }
-    else if(act==="sub-now"){ subNow($("#subOut").value,$("#subIn").value); }
-    else if(act==="gk-swap"){ swapKeeper($("#gkSel").value); }
     else if(act==="chip"){ tapChip(t.dataset.id,t.dataset.where); }
+    else if(act==="clock-edit"){ openClockEdit(); }
+    else if(act==="clk-cancel"){ closeClk(); }
+    else if(act==="clk-yes"){ clkStep="edit"; clkDraft=Math.max(0,state.game.secs); drawClkDialog(); }
+    else if(act==="clk-d"){ clkDraft=Math.max(0,Math.min(3599,clkDraft+(+t.dataset.d))); drawClkDialog(); }
+    else if(act==="clk-save"){ saveClock(); }
+    else if(act==="cols"){ setCols(+t.dataset.n); }
+    else if(act==="nk-toggle"){ nkOpen=!nkOpen; renderOnField(); }
+    else if(act==="nk-pick"){ pickNextKeeper(t.dataset.id); }
+    else if(act==="fmt-open"){ fmtOpen=!fmtOpen; fmtMode=null; fmtOffId=null; renderFmtCard(); if(fmtOpen){ var fc=$("#fmtCard"); if(fc&&fc.scrollIntoView) fc.scrollIntoView({block:"nearest"}); } }
+    else if(act==="fmt-mode"){ fmtMode=t.dataset.mode; fmtOffId=null; renderFmtCard(); }
+    else if(act==="fmt-off"){ fmtOffId=(fmtOffId===t.dataset.id)?null:t.dataset.id; renderFmtCard(); }
+    else if(act==="fmt-cancel"){ fmtOpen=false; fmtMode=null; fmtOffId=null; renderFmtCard(); }
+    else if(act==="fmt-apply"){ applyNoKeeper(); }
+    else if(act==="fix-open"){ fixOpen=(fixOpen===+t.dataset.i)?null:+t.dataset.i; renderFixCard(); }
+    else if(act==="fix-undo"){
+      // every Fix-a-mistake action is confirmed, and the prompt states the
+      // consequence — these all rewrite a ledger the season totals depend on
+      var uev=(state.game.recent||[])[+t.dataset.i], ui=+t.dataset.i;
+      if(uev) ask({title:"Undo: "+fixLabel(uev)+"?", body:fixConseq(uev), ok:"Undo it", danger:true})
+        .then(function(ok){ if(ok) undoFix(ui); });
+    }
+    else if(act==="fix-addback"){ fixAddBack(); }
+    else if(act==="fix-period"){ fixPeriodBack(); }
     else if(act==="new-season"){ startNewSeason(); }
     else if(act==="log-game"){ toggleLogGame(t.dataset.gid); }
     else if(act==="copy-link"){ copyTeamLink(); }
@@ -545,11 +1571,12 @@
   });
   $("#newName").addEventListener("keydown",function(e){ if(e.key==="Enter") addPlayer(); });
   $("#teamName").addEventListener("input",function(e){
-    state.team=e.target.value; save(); var u=$("#usName"); if(u) u.textContent=state.team||"Home";
+    state.team=e.target.value; save(); var u=$("#usName"); if(u) u.textContent=state.team||"Our team";
     var h=$("#hdrTitle"); if(h) h.textContent=state.team||"Coach's Sideline";
     if(TEAM){ var l=loadTeamList(); l.forEach(function(t){ if(t.tok===TEAM) t.name=state.team; }); saveTeamList(l); renderTeamSel(); }
   });
   $("#seasonName").addEventListener("input",function(e){ state.season=e.target.value; save(); });
+  $("#venue").addEventListener("change",function(e){ state.venue=e.target.value; save(); renderGame(); });
   $$("#periods,#onfield,#minsper").forEach(function(el){ el.addEventListener("change",syncSettings); });
   $("#format").addEventListener("change",function(e){
     state.format=e.target.value;
@@ -561,17 +1588,25 @@
   $("#teamSel").addEventListener("change",function(e){
     var v=e.target.value;
     if(v==="__new"){
-      if(!confirm("Start a brand-new team with its own link and roster?")){ renderTeamSel(); return; }
-      v=genToken();
-      var l=loadTeamList(); l.push({tok:v,name:""}); saveTeamList(l);
+      ask({title:"Start a brand-new team?", body:"It gets its own link and its own roster. This team stays where it is.",
+        ok:"Create the team"}).then(function(ok){
+        if(!ok){ renderTeamSel(); return; }
+        var tok=genToken(), l=loadTeamList();
+        l.push({tok:tok,name:""}); saveTeamList(l);
+        switchTeam(tok);
+      });
+      return;
     }
     if(v===TEAM) return;
-    try{ localStorage.setItem(BASE+":lastTeam",v); }catch(err){}
-    setHashToken(v);
-    // ponytail: re-entering boot()/initSync() in place is where the bugs would live; a reload is free here.
-    location.reload();
+    switchTeam(v);
   });
 
+  function switchTeam(tok){
+    try{ localStorage.setItem(BASE+":lastTeam",tok); }catch(err){}
+    setHashToken(tok);
+    // ponytail: re-entering boot()/initSync() in place is where the bugs would live; a reload is free here.
+    location.reload();
+  }
   function byId(id){ return state.roster.filter(function(p){return p.id===id;})[0]; }
   function nameOf(id){ var p=byId(id); return p?p.name:"?"; }
   function addPlayer(){
@@ -593,17 +1628,182 @@
     state.practice=[{id:"warmup-tag",mins:8},{id:"slalom",mins:8},{id:"throwin",mins:6},{id:"gates",mins:9},{id:"keeper",mins:8},{id:"gallery",mins:9},{id:"smallsided",mins:12}];
     save(); renderPractice(); toast("60-minute plan loaded — tweak away");
   }
-  function scoreChange(side,d){
+  function pstat(id){
+    var g=state.game; g.playerStats=g.playerStats||{};
+    var ps=g.playerStats[id]=g.playerStats[id]||{goals:0,sog:0,assists:0};
+    if(ps.assists==null) ps.assists=0;   // docs written before assists existed
+    return ps;
+  }
+  function scoreChange(side,d,playerId,assistId){
     var g=state.game; g[side]=Math.max(0,g[side]+d);
     $("#"+(side==="us"?"usScore":"themScore")).textContent=g[side];
-    logEvent("goal",{side:side,d:d});
+    if(side==="us" && d>0){
+      if(playerId) pstat(playerId).goals+=d;
+      if(assistId) pstat(assistId).assists+=d;
+    }
+    var evId=logEvent("goal",{side:side,d:d,playerId:playerId||null,assistId:assistId||null},playerId||null);
     queueGameRow();   // the archive row carries the score
-    save(); renderNudge();
+    // logEvent just changed g.recent — redraw it. renderGoLive too: the first
+    // goal can be what makes gameUnderway() true, and that drives the FAB tab.
+    save(); renderNudge(); renderFixCard(); renderGoLive();
+    if(playerId||assistId) renderOnField();   // refresh the scorer's goal/SOG badge
+    return evId;
+  }
+
+  /* ---------- goals: who scored, who assisted, and fixing both after ----------
+     state.game.goals is the one list the + modal, the − modal and the
+     timestamp editor all read. Every entry keeps the archive event id it
+     wrote, so a correction can name the row it corrects. */
+  var gd=null;   // {step, side, scorerId, assistId, idx, period, secs}
+  function onFieldIds(){
+    var lu=state.lineup;
+    if(lu && lu.periods && lu.periods.length) return (lu.periods[curPi()]||[]).slice();
+    return state.roster.filter(function(p){ return p.present; }).map(function(p){ return p.id; });
+  }
+  function goalsFor(side){
+    return (state.game.goals||[]).map(function(go,i){ return {go:go,i:i}; })
+      .filter(function(x){ return x.go.side===side; });
+  }
+  function openGoalDialog(step,seed){
+    var dlg=$("#goalDialog"); if(!dlg||!dlg.showModal) return false;
+    gd=Object.assign({step:step,side:"us",scorerId:null,assistId:null,idx:-1},seed||{});
+    drawGoalDialog();
+    if(!dlg.open) dlg.showModal();
+    return true;
+  }
+  function closeGoal(){ var dlg=$("#goalDialog"); gd=null; if(dlg&&dlg.open) dlg.close(); }
+  function goalWhen(go){ return "P"+go.period+" · "+mmssTxt(go.secs||0); }
+  function goalWho(go){
+    if(go.side!=="us") return "Visitors";
+    if(!go.playerId) return "Unattributed goal";
+    return nameOf(go.playerId)+(go.assistId?" (assist "+nameOf(go.assistId)+")":"");
+  }
+  function drawGoalDialog(){
+    var dlg=$("#goalDialog"); if(!dlg||!gd) return;
+    var g=state.game, html="";
+    if(gd.step==="scorer"||gd.step==="assist"){
+      var pick=gd.step==="scorer";
+      var ids=onFieldIds().filter(function(id){ return pick||id!==gd.scorerId; });
+      html='<div class="hd"><h4>'+(pick?"Who scored?":"Assisted by?")+'</h4><span class="was tnum">'+"P"+g.period+" · "+mmssTxt(g.secs)+'</span></div>'
+        +(pick?'':'<p style="margin:8px 0 0">'+esc(nameOf(gd.scorerId))+' scored. Tap whoever set it up, or skip.</p>')
+        +'<div class="gpick">'+ids.map(function(id){
+          var sel=pick?(gd.scorerId===id):(gd.assistId===id);
+          return '<button class="gp'+(sel?" sel":"")+'" data-act="goal-pick" data-id="'+id+'">'+esc(nameOf(id))+'</button>';
+        }).join("")+'</div>'
+        +'<div class="btns"><button class="btn ghost" data-act="goal-cancel">Cancel</button>'
+        +'<button class="btn" style="flex:2" data-act="goal-skip">'+(pick?"No scorer — just the goal":"No assist — save goal")+'</button></div>';
+    } else if(gd.step==="remove"){
+      var list=goalsFor(gd.side);
+      html='<div class="hd"><h4>Remove which goal?</h4><span class="was tnum">'+g.us+'–'+g.them+'</span></div>'
+        +'<p>The goal comes off the score and off that player\'s record. It is logged as a correction, never deleted.</p>'
+        +(list.length
+          ? '<div class="glist">'+list.map(function(x){
+              return '<div class="grow"><button class="gmain" data-act="goal-del" data-i="'+x.i+'">'
+                +'<span class="gw">'+esc(goalWho(x.go))+'</span><span class="gt tnum">'+goalWhen(x.go)+'</span>'
+                +'<span class="gx">Remove</span></button>'
+                +'<button class="gtime" data-act="goal-time" data-i="'+x.i+'" title="Correct the time of this goal">🕑</button></div>';
+            }).join("")+'</div>'
+          : '<div class="empty">No goals recorded for this side. Use the score buttons to correct the number directly.</div>')
+        +'<div class="btns"><button class="btn ghost" style="flex:1" data-act="goal-cancel">Close</button>'
+        +(g[gd.side]>0?'<button class="btn cone" style="flex:1" data-act="goal-dec">Just take one off the score</button>':'')+'</div>';
+    } else if(gd.step==="time"){
+      var go=(g.goals||[])[gd.idx]||{};
+      html='<div class="hd"><h4>When was it scored?</h4><span class="was tnum">was '+goalWhen(go)+'</span></div>'
+        +'<p>'+esc(goalWho(go))+'. Only the game-log time changes — the score and the player\'s record stay as they are.</p>'
+        +'<div class="clock-big tnum draft">P'+gd.period+' · '+mmssTxt(gd.secs)+'</div>'
+        +'<div class="steps">'
+        +'<div><span class="lab">Period</span><div class="pair"><button data-act="gt-p" data-d="-1">−</button><button data-act="gt-p" data-d="1">+</button></div></div>'
+        +'<div><span class="lab">Minutes</span><div class="pair"><button data-act="gt-s" data-d="-60">−</button><button data-act="gt-s" data-d="60">+</button></div></div>'
+        +'</div>'
+        +'<div class="steps" style="margin-top:8px"><div style="grid-column:1/-1"><span class="lab">Seconds</span>'
+        +'<div class="pair"><button data-act="gt-s" data-d="-10">−</button><button data-act="gt-s" data-d="10">+</button></div></div></div>'
+        +'<div class="btns"><button class="btn ghost" data-act="goal-cancel">Cancel</button>'
+        +'<button class="btn" style="flex:2" data-act="gt-save">Save the time</button></div>';
+    }
+    dlg.innerHTML=html;
+  }
+  function commitGoal(){
+    var g=state.game, side=gd.side, scorer=gd.scorerId, assist=gd.assistId;
+    var evId=scoreChange(side,1,scorer,assist);
+    (g.goals=g.goals||[]).unshift({evId:evId,side:side,playerId:scorer||null,assistId:assist||null,
+      period:g.period, secs:Math.max(0,g.secs), at:nowMs()});
+    closeGoal(); save(); renderGame();
+    buzz(40);
+    toast(scorer
+      ? nameOf(scorer)+" scores"+(assist?" — assist "+nameOf(assist):"")+". "+g.us+"–"+g.them
+      : "Goal — "+(state.team||"us")+". "+g.us+"–"+g.them, true);
+  }
+  // Removing is a correction, exactly like Fix a mistake: the score, the
+  // scorer's goal and the assister's assist all come back off together.
+  function removeGoal(i){
+    var g=state.game, go=(g.goals||[])[i]; if(!go) return;
+    if(g[go.side]<=0){ toast("That side is already at 0."); return; }
+    ask({title:"Remove this goal?",
+      body:goalWho(go)+" — "+goalWhen(go)+"\n\nThe score goes to "
+        +(go.side==="us"?(g.us-1)+"–"+g.them:g.us+"–"+(g.them-1))
+        +(go.playerId?", and it comes off "+nameOf(go.playerId)+"'s record":"")
+        +(go.assistId?" and "+nameOf(go.assistId)+"'s assists":"")+".",
+      ok:"Remove the goal", danger:true}).then(function(ok){ if(ok) doRemoveGoal(i); });
+  }
+  function doRemoveGoal(i){
+    var g=state.game, go=(g.goals||[])[i]; if(!go) return;
+    g[go.side]=Math.max(0,g[go.side]-1);
+    if(go.playerId){ var ps=(g.playerStats||{})[go.playerId]; if(ps&&ps.goals>0) ps.goals--; }
+    if(go.assistId){ var as=(g.playerStats||{})[go.assistId]; if(as&&as.assists>0) as.assists--; }
+    logEvent("goal",{side:go.side,d:-1,playerId:go.playerId||null,assistId:go.assistId||null,
+      correction:true,ofEvent:go.evId||null},go.playerId||null);
+    g.goals.splice(i,1);
+    // the same goal sitting in the undo list would decrement it a second time
+    if(go.evId) g.recent=(g.recent||[]).filter(function(r){ return !(r.kind==="goal"&&r.id===go.evId); });
+    queueGameRow(); closeGoal(); save(); renderGame(); renderLineup();
+    toast(goalWho(go)+" — goal removed. "+g.us+"–"+g.them, true);
+  }
+  function saveGoalTime(){
+    var g=state.game, go=(g.goals||[])[gd.idx]; if(!go){ closeGoal(); return; }
+    var was=goalWhen(go);
+    if(was==="P"+gd.period+" · "+mmssTxt(gd.secs)){ closeGoal(); return; }   // nothing to change
+    var to={period:gd.period,secs:gd.secs};
+    ask({title:"Move this goal to P"+to.period+" · "+mmssTxt(to.secs)+"?",
+      body:goalWho(go)+" — currently logged at "+was+". Only the game-log time changes.",
+      ok:"Move it"}).then(function(ok){ if(ok) doSaveGoalTime(go,to,was); });
+  }
+  function doSaveGoalTime(go,to,was){
+    var g=state.game;
+    go.period=to.period; go.secs=to.secs;
+    // append-only: the original row stays, this names it and carries the fix
+    logEvent("goal_time",{ofEvent:go.evId||null,period:go.period,secs:go.secs},go.playerId||null);
+    var r=(g.recent||[]).filter(function(x){ return x.id===go.evId; })[0];
+    if(r){ r.period=go.period; r.secs=go.secs; }
+    closeGoal(); save(); renderGame();
+    toast(goalWho(go)+" — goal moved from "+was+" to "+goalWhen(go),true);
+  }
+  // Our goals go through the who-scored sheet; the visitors have no players to
+  // credit, so their + stays a single tap. Either side's − opens the goal list
+  // when there is something recorded to pick from.
+  function scoreTap(side,d){
+    if(d>0){
+      if(side==="us" && openGoalDialog("scorer",{side:side})) return;
+      scoreChange(side,d); renderGame(); return;
+    }
+    if(goalsFor(side).length && openGoalDialog("remove",{side:side})) return;
+    scoreChange(side,d); renderGame();
+  }
+  // Shots on goal don't touch the team score, but they are undoable like
+  // anything else that lands in the ledger — a mis-tap has to be fixable.
+  function sogTap(id){
+    var g=state.game;
+    g.playerStats=g.playerStats||{};
+    var ps=g.playerStats[id]=g.playerStats[id]||{goals:0,sog:0};
+    ps.sog+=1;
+    logEvent("sog",{playerId:id},id);
+    save(); renderOnField(); renderFixCard();
   }
   function toggleTimer(){
     var g=state.game;
+    if(atFullTime()){ nextPeriod(); return; }   // Start is now Finish the game
     if(g.secs<=0){ g.secs=state.minsper*60; }
     g.running=!g.running; g.started=true;   // from here on, rebuilds must not rewrite this period
+    g.stoppedAt=g.running?0:nowMs();        // lets Fix a mistake offer "count that stop as played"
     if(g.running&&!g.startedAt){
       g.startedAt=nowMs();                  // kickoff: the game gets its archive row
       if(!g.gid) g.gid=genToken();          // games built before this version have no id yet
@@ -613,25 +1813,57 @@
     if(g.running) startTicker(); else stopTicker();
     save(); renderGame();
   }
-  function resetTimer(){ var g=state.game; g.running=false; stopTicker(); g.secs=state.minsper*60; save(); renderGame(); }
+  // Reset is a false-start tool — the ref wasn't ready and some clock bled off
+  // before kickoff. Once the period's clock has been used as a credit boundary
+  // (any sub, keeper swap or format switch splits an app entry at g.secs),
+  // resetting it inflates the frac of every later split in that period. From
+  // there the right tool is Set the clock, which is logged and undoable.
+  // Read the split off lu.app, not g.recent — that list is capped at 8 and is
+  // spliced on undo, so an early sub would fall off it and re-enable Reset.
+  function canReset(){
+    var g=state.game, lu=state.lineup;
+    if(g.onBreak) return false;
+    if(g.secs>=state.minsper*60) return false;          // nothing to reset
+    var es=(lu&&lu.app&&lu.app[curPi()])||[];
+    return !es.some(function(e){ return e.frac<1-1e-9; });
+  }
+  // Reset and Period + both throw away clock the coach can't get back, so both
+  // are gated — and each sits on the thing it changes (the clock, the period badge).
+  function resetTimer(){
+    var g=state.game;
+    if(!canReset()) return;
+    ask({title:"Reset the clock to "+mmssTxt(state.minsper*60)+"?",
+      body:"The period, the score and playing time already credited stay as they are.",
+      ok:"Reset the clock", danger:true}).then(function(ok){
+      if(!ok||!canReset()) return;                      // the clock runs on while the sheet is open
+      var from=Math.max(0,g.secs);
+      g.running=false; stopTicker(); g.secs=state.minsper*60; g.stoppedAt=0;
+      logEvent("clock_set",{from:from,to:g.secs});      // undoable like every other clock change
+      save(); renderGame();
+    });
+  }
+  // Manual override, rarely needed now that periods advance on their own:
+  // skip straight to wherever auto-advance would land — end the period now,
+  // skip the rest of a break, or (on the last period) close out full time.
   function nextPeriod(){
-    var g=state.game, maxP=maxPeriods();
-    if(g.period>=maxP){
-      g.running=false; stopTicker();
-      closeGameRow();                       // full time: stamp the archive row, flush the last period
-      save(); renderGame(); renderLog();
-      toast("Game over — final "+g.us+"–"+g.them+". Build a lineup to start the next one.");
-      return;
-    }
-    var ended=g.period;
-    logEvent("period",{ended:ended});
-    queueAppearances(ended);                // the finished period's positions go to the season ledger
-    g.period++; g.running=false; stopTicker(); g.secs=state.minsper*60;
-    save(); renderGame();
-    // Guide: 2–3 min sub break between quarters, 5 min at halftime (10 when it's hot).
-    toast((maxP%2===0 && ended===maxP/2)
-      ? "Halftime — 5 min break (10 on a hot day)"
-      : "Sub break — 2–3 min, then Period "+g.period);
+    var g=state.game, last=g.period>=maxPeriods();
+    var q = last
+      ? {title:"End the game now?", body:"Final score "+g.us+"–"+g.them+". The game is stamped full time and goes to the archive.", ok:"End the game"}
+      : (g.onBreak
+        ? {title:"Start period "+(g.period+1)+" now?", body:"The rest of the break is skipped.", ok:"Start the period"}
+        : {title:"End period "+g.period+" now?", body:mmssTxt(g.secs)+" is still on the clock.", ok:"End the period"});
+    q.danger=true;
+    ask(q).then(function(ok){
+      if(!ok) return;
+      if(last){
+        g.running=false; g.onBreak=false; stopTicker();
+        closeGameRow();                       // full time: stamp the archive row, flush the last period
+        save(); renderGame(); renderLog();
+        toast("Game over — final "+g.us+"–"+g.them+". Build a lineup to start the next one.",true);
+        return;
+      }
+      if(g.onBreak) advancePeriod(); else periodExpired();
+    });
   }
   // A game leaves the live doc through here exactly once: full time, a new
   // game replacing it, or a season rollover.
@@ -645,13 +1877,16 @@
   }
   // Seasons are a reset boundary for the career ledgers, nothing more.
   function startNewSeason(){
-    var nm=prompt("Name the new season. The fairness ledgers reset; this season's games stay in the archive.", state.season||"");
-    if(!nm||!nm.trim()) return;
+    ask({title:"Start a new season?", body:"The fairness ledgers reset; this season's games stay in the archive. Name it:",
+      input:state.season||"", placeholder:"e.g. Spring 2027", ok:"Start the season", danger:true})
+      .then(function(nm){ if(nm) doNewSeason(nm); });
+  }
+  function doNewSeason(nm){
     closeGameRow();
     commitGame(state.lineup);               // bank the outgoing game through the path that already exists
     state.lineup=null; state.played={}; state.kept={}; state.posTotals={};
     state.season=nm.trim();
-    state.game={us:0,them:0,period:1,secs:state.minsper*60,running:false};
+    state.game={us:0,them:0,period:1,secs:state.minsper*60,running:false,onBreak:false,playerStats:{}};
     stopTicker();
     save(); renderAll(); renderLog();
     toast("New season: "+state.season+" — ledgers reset, roster kept");
@@ -675,7 +1910,11 @@
     return s; // 32 hex chars — inside the server's [A-Za-z0-9_-]{8,64}
   }
   function hashToken(){ var m=(location.hash||"").match(/[#&]t=([A-Za-z0-9_-]{8,64})/); return m?m[1]:null; }
-  function setHashToken(tok){ try{ history.replaceState(null,"","#t="+tok); }catch(e){ location.hash="t="+tok; } }
+  // replaceState, and it must not drop the tab the coach is already on
+  function setHashToken(tok){
+    var h=hashFor(activeTab(),tok);
+    try{ history.replaceState(null,"",h); }catch(e){ location.hash=h.slice(1); }
+  }
 
   async function detectBackend(){
     try{
@@ -705,11 +1944,15 @@
       });
       if(res.status===409){
         var cur=await res.json(); pushing=false;
-        var keepMine=!confirm(
-          "“"+(state.team||"This team")+"” was changed on another device.\n\n"+
-          "OK = use the OTHER device’s version (discard the unsynced changes here)\n"+
-          "Cancel = keep THIS device’s version and overwrite the other");
-        if(keepMine){ return push(true); }
+        // Labelled buttons instead of OK/Cancel — nobody should have to work out
+        // which way round a yes/no maps onto losing a device's changes.
+        var useTheirs=await ask({
+          title:"Changed on another device",
+          body:"“"+(state.team||"This team")+"” was edited somewhere else. Only one version can win — the other is discarded.",
+          ok:"Use the other device's version",
+          cancel:"Keep this device's",
+          danger:true});
+        if(!useTheirs){ return push(true); }
         adoptServer(cur); setPill("ok","Synced"); return;
       }
       if(!res.ok) throw new Error("http "+res.status);
@@ -755,15 +1998,31 @@
   function loadOutbox(){ try{ var o=JSON.parse(localStorage.getItem(KEY+":outbox")); if(o&&o.events) return o; }catch(e){} return {games:{},events:[],appearances:{}}; }
   function saveOutbox(ob){ try{ localStorage.setItem(KEY+":outbox",JSON.stringify(ob)); }catch(e){} }
 
+  // Returns the archive event id so a caller can point back at this row later
+  // (a goal record keeps it, and a timestamp correction names it).
   function logEvent(kind,detail,playerId){
-    var g=state.game; if(!g||!g.gid) return;
+    var g=state.game; if(!g||!g.gid) return null;
     var ob=loadOutbox();
+    var evId="e"+nowMs().toString(36)+Math.floor(Math.random()*1679616).toString(36);
     ob.events.push({
-      id:"e"+nowMs().toString(36)+Math.floor(Math.random()*1679616).toString(36),
+      id:evId,
       game_id:g.gid, at:nowMs(), period:g.period, secs:Math.max(0,g.secs), kind:kind,
       player_id:playerId||null, detail:detail?JSON.stringify(detail):null
     });
     saveOutbox(ob);
+    // Mirror the undoable kinds for Fix a mistake (3a). Corrections never
+    // re-enter the undo list, or undoing an undo would ping-pong forever.
+    var undoable = !(detail&&detail.correction) &&
+      ((kind==="goal"&&detail&&detail.d>0) || kind==="sog" || kind==="sub" || kind==="keeper" || kind==="clock_set" || kind==="format");
+    if(undoable){
+      var rec=(g.recent=g.recent||[]);
+      // id lets the goal modal and the undo list stay in step — removing a goal
+      // in one has to drop the matching row from the other.
+      rec.unshift({id:evId, period:g.period, secs:Math.max(0,g.secs), kind:kind, detail:detail||{}});
+      if(rec.length>8) rec.length=8;
+      fixOpen=null;
+    }
+    return evId;
   }
   function queueGameRow(){
     var g=state.game, lu=state.lineup; if(!g.gid||!g.startedAt||!lu) return;
@@ -771,6 +2030,7 @@
     ob.games[g.gid]={
       id:g.gid, team_id:TEAM||"", season:state.season||"", format:state.format||"u8",
       started_at:g.startedAt, ended_at:g.endedAt||null, opponent:null,
+      venue:state.venue==="away"?"away":"home",
       us:g.us, them:g.them, periods:lu.Q, onfield:lu.N, minsper:lu.minsper
     };
     saveOutbox(ob);
@@ -790,26 +2050,37 @@
     if(!BACKEND||!TEAM||flushing) return;
     flushing=true;
     try{
-      var ob=loadOutbox(), base="/api/team/"+encodeURIComponent(TEAM);
+      var base="/api/team/"+encodeURIComponent(TEAM);
       var post=function(p,body){ return fetch(base+p,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)}); };
-      // Game rows first: events and appearances only exist under a games row,
-      // and flushing them before it lands would silently drop them server-side.
-      var gids=Object.keys(ob.games), gamesOk=true;
+      // Re-read the outbox after EVERY await, and clear rows by id rather than
+      // by position. logEvent() writes to this same localStorage key, so saving
+      // a snapshot taken before the request drops whatever the coach tapped
+      // while it was in flight — a goal could vanish from the archive.
+      var gamesOk=true;
+      var gids=Object.keys(loadOutbox().games);
       for(var i=0;i<gids.length;i++){
-        var rg=await post("/games",ob.games[gids[i]]);
-        if(rg.ok){ delete ob.games[gids[i]]; saveOutbox(ob); } else { gamesOk=false; }
+        var row=loadOutbox().games[gids[i]];
+        if(!row) continue;
+        var rg=await post("/games",row);
+        if(rg.ok){ var og=loadOutbox(); delete og.games[gids[i]]; saveOutbox(og); } else { gamesOk=false; }
       }
-      while(gamesOk&&ob.events.length){
-        var batch=ob.events.slice(0,200);
+      while(gamesOk){
+        var batch=loadOutbox().events.slice(0,200);
+        if(!batch.length) break;
         var re=await post("/events",{events:batch});
         if(!re.ok) break;
-        ob.events.splice(0,batch.length); saveOutbox(ob);
+        var sent={}; batch.forEach(function(e){ sent[e.id]=1; });
+        var oe=loadOutbox();
+        oe.events=oe.events.filter(function(e){ return !sent[e.id]; });
+        saveOutbox(oe);
       }
-      while(gamesOk&&Object.keys(ob.appearances).length){
-        var keys=Object.keys(ob.appearances).slice(0,200);
-        var ra=await post("/appearances",{rows:keys.map(function(k){ return ob.appearances[k]; })});
+      while(gamesOk){
+        var cur=loadOutbox(), keys=Object.keys(cur.appearances).slice(0,200);
+        if(!keys.length) break;
+        var ra=await post("/appearances",{rows:keys.map(function(k){ return cur.appearances[k]; })});
         if(!ra.ok) break;
-        keys.forEach(function(k){ delete ob.appearances[k]; }); saveOutbox(ob);
+        var oa=loadOutbox();
+        keys.forEach(function(k){ delete oa.appearances[k]; }); saveOutbox(oa);
       }
       refreshPositions();
     }catch(e){}finally{ flushing=false; }
@@ -842,14 +2113,63 @@
   }
   async function renderLog(){
     var card=$("#logCard"); if(!card) return;
-    if(!BACKEND||!TEAM){ card.hidden=true; return; }
-    card.hidden=false;
+    // The archive is the whole Season tab now, so an empty state has to say
+    // why rather than leaving the coach on a blank page.
+    if(!BACKEND||!TEAM){
+      $("#seasonLeaders").innerHTML="";
+      $("#seasonLog").innerHTML='<div class="empty">Local-only on this device — no season archive. Games are archived when the app is served with its backend.</div>';
+      return;
+    }
     var arch=loadArchive();
-    drawLog(arch);   // cached copy first — the sideline case
+    drawLog(arch); drawLeaders(arch);   // cached copy first — the sideline case
+    var base="/api/team/"+encodeURIComponent(TEAM), season=encodeURIComponent(state.season||"");
     try{
-      var r=await fetch("/api/team/"+encodeURIComponent(TEAM)+"/games?season="+encodeURIComponent(state.season||""));
+      var r=await fetch(base+"/games?season="+season);
       if(r.ok){ arch.games=(await r.json()).games||[]; saveArchive(arch); drawLog(arch); }
     }catch(e){}
+    try{
+      var rs=await fetch(base+"/stats?season="+season);
+      if(rs.ok){ arch.stats=(await rs.json()).stats||[]; saveArchive(arch); drawLeaders(arch); }
+    }catch(e){}
+  }
+  // Goals and shots per player, from the event rows. Undos are extra rows, not
+  // deletions, so a goal counts detail.d (+1/−1) and a shot counts its
+  // correction flag as −1 — the same netting the season query does in SQL.
+  function rollupEvents(evs){
+    var by={};
+    (evs||[]).forEach(function(ev){
+      if(!ev.player_id) return;
+      var d={}; try{ d=JSON.parse(ev.detail)||{}; }catch(e){}
+      if(ev.kind!=="goal"&&ev.kind!=="sog") return;
+      var r=by[ev.player_id]=by[ev.player_id]||{goals:0,shots:0,assists:0};
+      if(ev.kind==="goal"){
+        r.goals+=(+d.d||0);
+        if(d.assistId){ var a=by[d.assistId]=by[d.assistId]||{goals:0,shots:0,assists:0}; a.assists+=(+d.d||0); }
+      } else r.shots+=(d.correction?-1:1);
+    });
+    return by;
+  }
+  // Shared by the per-game rollup and the season leaders — same shape, same sort.
+  function statRows(by,cls){
+    var ids=Object.keys(by).filter(function(id){ return (by[id].goals>0)||(by[id].shots>0)||(by[id].assists>0); });
+    if(!ids.length) return "";
+    ids.sort(function(a,b){ return (by[b].goals-by[a].goals)||((by[b].assists||0)-(by[a].assists||0))
+      ||(by[b].shots-by[a].shots)||nameOf(a).localeCompare(nameOf(b)); });
+    return '<div class="statlist '+(cls||"")+'">'+ids.map(function(id,i){
+      var r=by[id];
+      return '<div class="sr">'+(cls==="lead"?'<span class="rk">'+(i+1)+'</span>':'')
+        +'<span class="who">'+esc(nameOf(id))+'</span>'
+        +'<span class="v"><span title="Goals">⚽ <b>'+Math.max(0,r.goals)+'</b></span>'
+        +'<span title="Assists">🅐 <b>'+Math.max(0,r.assists||0)+'</b></span>'
+        +'<span title="Shots on goal">🥅 <b>'+Math.max(0,r.shots)+'</b></span></span></div>';
+    }).join("")+'</div>';
+  }
+  function drawLeaders(arch){
+    var box=$("#seasonLeaders"); if(!box) return;
+    var by={};
+    (arch.stats||[]).forEach(function(s){ by[s.player_id]={goals:+s.goals||0,shots:+s.shots||0,assists:+s.assists||0}; });
+    box.innerHTML=statRows(by,"lead")
+      || '<div class="empty">No goals or shots on goal recorded yet this season. Tap the ⚽ and 🥅 buttons on a player\'s chip during a game.</div>';
   }
   function drawLog(arch){
     var box=$("#seasonLog"); if(!box) return;
@@ -868,18 +2188,41 @@
     var evs=arch.events[g.id];
     if(!evs) return '<div class="hint" style="padding:6px 2px">Loading…</div>';
     if(!evs.length) return '<div class="hint" style="padding:6px 2px">No events recorded.</div>';
-    return '<ul class="loglist">'+evs.map(function(ev){
+    // A goal logged late gets its time corrected by a later goal_time row that
+    // names it. The archive is append-only, so the fix is applied at read time.
+    var fix={};
+    evs.forEach(function(ev){
+      if(ev.kind!=="goal_time") return;
+      var d={}; try{ d=JSON.parse(ev.detail)||{}; }catch(e){}
+      if(d.ofEvent) fix[d.ofEvent]={period:d.period,secs:d.secs};
+    });
+    var shown=evs.filter(function(ev){ return ev.kind!=="goal_time"; }).map(function(ev){
+      var f=fix[ev.id];
+      return f?Object.assign({},ev,{period:f.period,secs:f.secs,moved:true}):ev;
+    }).sort(function(a,b){ return (a.period-b.period) || (b.secs-a.secs) || (a.at-b.at); });
+    return statRows(rollupEvents(evs),"game")
+      +'<ul class="loglist">'+shown.map(function(ev){
       var s=Math.max(0,ev.secs||0), mm=Math.floor(s/60), ss=s%60;
-      return '<li><span class="tnum">P'+ev.period+" · "+mm+":"+(ss<10?"0":"")+ss+"</span> "+esc(evText(ev))+"</li>";
+      return '<li><span class="tnum">P'+ev.period+" · "+mm+":"+(ss<10?"0":"")+ss+"</span> "+esc(evText(ev))
+        +(ev.moved?' <span class="hint">(time corrected)</span>':"")+"</li>";
     }).join("")+"</ul>";
   }
   function evText(ev){
     var d={}; try{ d=JSON.parse(ev.detail)||{}; }catch(e){}
-    if(ev.kind==="goal") return d.d<0 ? "Score correction ("+d.side+")" : (d.side==="us" ? "Goal — "+(state.team||"us") : "Goal — them");
-    if(ev.kind==="sub") return nameOf(ev.player_id)+" on for "+nameOf(d.out);
-    if(ev.kind==="keeper") return nameOf(ev.player_id)+" into goal for "+nameOf(d.out);
-    if(ev.kind==="period") return d.final ? "Full time "+d.us+"–"+d.them : "End of period "+d.ended;
+    if(ev.kind==="goal") return d.d<0
+      ? (ev.player_id ? nameOf(ev.player_id)+"'s goal removed" : "Score correction ("+d.side+")")
+      : (d.side==="us"
+        ? (ev.player_id?nameOf(ev.player_id)+" scores"+(d.assistId?", assist "+nameOf(d.assistId):"")+" — "+(state.team||"us"):"Goal — "+(state.team||"us"))
+        : "Goal — them");
+    if(ev.kind==="goal_time") return "Goal time corrected to P"+d.period+" · "+mmssTxt(d.secs||0);
+    if(ev.kind==="sog") return nameOf(ev.player_id)+" — shot on goal"+(d.correction?" (undo)":"");
+    if(ev.kind==="sub") return nameOf(ev.player_id)+" on for "+nameOf(d.out)+(d.correction?" (undo)":"");
+    if(ev.kind==="keeper") return nameOf(ev.player_id)+" into goal for "+nameOf(d.out)+(d.correction?" (undo)":"");
+    if(ev.kind==="keeper_next") return nameOf(ev.player_id)+" set as next keeper";
+    if(ev.kind==="period") return d.final ? "Full time "+d.us+"–"+d.them : (d.correction ? "Period set back to "+d.fixedTo : "End of period "+d.ended);
     if(ev.kind==="clock") return d.expired ? "Period clock expired" : (d.running ? "Clock started" : "Clock stopped");
+    if(ev.kind==="clock_set") return "Clock set to "+mmssTxt(d.to||0)+(d.correction?" (undo)":(d.played?" — "+mmssTxt(d.played)+" counted as played":""));
+    if(ev.kind==="format") return d.keeper ? "Format — keeper"+(d.correction?" (undo)":"") : "Format — no keeper";
     return ev.kind;
   }
   async function toggleLogGame(gid){
@@ -935,6 +2278,7 @@
     $("#periods").value=state.periods; $("#onfield").value=state.onfield; $("#minsper").value=state.minsper;
     $("#teamName").value=state.team||"";
     $("#format").value=state.format||"u8";
+    $("#venue").value=state.venue||"home";
     $("#seasonName").value=state.season||"";
     applyFormatChrome(); renderTeamSel();
     renderFormatNote();
@@ -989,8 +2333,18 @@
     if(state.game.secs==null) state.game.secs=state.minsper*60;
     state.game.running=false;   // never resume a live clock on reload
     renderAll();
+    showTab(tabFromHash()||"lineup");   // deep link / reload lands on the tab in the URL
     setInterval(renderEnds,30000);   // "ends ≈" stays fresh while paused — tick() won't run then
+    // the burn-down is wall-clock, so it drifts out of date on its own
+    setInterval(function(){
+      if(state.practiceRun&&state.practiceRun.startedAt&&$("#p-practice").classList.contains("active")) renderBurn();
+    },15000);
+    setInterval(tickToastAges,5000);   // cheap: a no-op when nothing is on screen
+    // Esc (or any other close) answers "no" rather than leaving a dangling promise
+    var askDlg=$("#askDialog");
+    if(askDlg) askDlg.addEventListener("close",function(){ if(askDone) askClose(askIsText?null:false); });
     initSync();                 // async — reconciles with the backend if one is present
+    initAlerts();               // needs TEAM, so it cannot run at parse time
   }
   boot();
 

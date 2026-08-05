@@ -141,6 +141,56 @@ var LineupCore = (function () {
     return true;
   }
 
+  // Mid-game switch to a keeperless field (the t5 "no keeper" flow). The
+  // keeper comes out of goal keeping the goal time already credited, and one
+  // chosen player (offId — may be the keeper) leaves the field for the rest
+  // of the period. frac = the fraction of the period still to play.
+  // Returns {gk, offPos} for the correction log (offPos is what applyFormatOn
+  // needs to reverse it), or null if it can't apply.
+  function applyFormatOff(lu, pi, offId, frac) {
+    if (!lu || !lu.keeper || !offId) return null;
+    if (lu.periods[pi].indexOf(offId) < 0) return null;
+    var es = appOf(lu, pi), gk = lu.gk[pi];
+    var eOff = activeEntry(es, offId);
+    var offPos = eOff ? eOff.pos : "D";
+    if (gk) {
+      lu.gk[pi] = null;
+      lu.gkActual[gk] = (lu.gkActual[gk] || 0) - frac;
+      var eGk = activeEntry(es, gk);
+      if (eGk) eGk.frac -= frac;
+      if (gk !== offId) addFrac(es, gk, "D", frac);   // plays out the rest
+    }
+    if (offId !== gk) {
+      if (eOff) eOff.frac -= frac;
+    }
+    lu.actual[offId] = (lu.actual[offId] || 0) - frac;
+    lu.periods[pi].splice(lu.periods[pi].indexOf(offId), 1);
+    lu.keeper = false;
+    return { gk: gk || null, offPos: offPos };
+  }
+
+  // Reverse of applyFormatOff: onId rejoins the field at onPos and gkId goes
+  // back in goal, each credited frac (the fraction of the period remaining).
+  function applyFormatOn(lu, pi, onId, onPos, gkId, frac) {
+    if (!lu || lu.keeper || !onId) return false;
+    if (lu.periods[pi].indexOf(onId) >= 0) return false;
+    var es = appOf(lu, pi);
+    lu.periods[pi].push(onId);
+    lu.actual[onId] = (lu.actual[onId] || 0) + frac;
+    addFrac(es, onId, onPos, frac);
+    if (gkId && lu.periods[pi].indexOf(gkId) >= 0) {
+      lu.gk[pi] = gkId;
+      lu.gkActual[gkId] = (lu.gkActual[gkId] || 0) + frac;
+      if (gkId !== onId) {
+        var eG = activeEntry(es, gkId);   // the field time they were playing out
+        if (eG) eG.frac -= frac;
+        addFrac(es, gkId, "GK", frac);
+      }
+      lu.keeper = true;
+    }
+    return true;
+  }
+
   // Swap two field players' position labels. ponytail: the label swaps
   // wholesale — mid-period D/F fractions aren't split the way GK and sub
   // minutes are; D/F is a judgement aid, not a capped stat.
@@ -166,6 +216,37 @@ var LineupCore = (function () {
     });
   }
 
+  // Periods a player has ACTUALLY PLAYED through period `pi` — as opposed to
+  // periods they are down to play, which is what the raw app fracs hold.
+  //
+  // buildPeriods stamps every entry frac:1 at build time, so a player on the
+  // field at kickoff already carries a full period before the ball moves. The
+  // one period on the clock is therefore discounted by the share of it that has
+  // not run yet. A player already subbed off needs no discount: applySub
+  // trimmed their entry to exactly what they played. Periods after `live`
+  // contribute nothing — they have not been played at all.
+  //
+  //   live = index of the period on the clock
+  //   rem  = fraction of that period still unplayed (1 before kickoff, 0 at the
+  //          whistle, and 0 during a break — the break clock belongs to a
+  //          period that is already over)
+  //
+  // Note the two definitions converge at every period boundary (rem = 0), which
+  // is where the guide's "3 of 4 quarters" rule is actually judged.
+  function playedThrough(lu, pi, id, live, rem) {
+    var app = (lu && lu.app) || [];
+    var r = Math.min(1, Math.max(0, rem || 0));
+    var last = Math.min(pi, live), n = 0;
+    for (var q = 0; q <= last && q < app.length; q++) {
+      var cur = 0;
+      app[q].forEach(function (e) { if (e.id === id && e.frac > 1e-9) cur += e.frac; });
+      if (cur <= 0) continue;
+      if (q === live && ((lu.periods[q] || []).indexOf(id) >= 0)) cur -= r;
+      if (cur > 0) n += cur;
+    }
+    return n;
+  }
+
   // Rows for the append-only `appearances` archive, periods 1..upto only —
   // future planned periods must never reach the season ledger.
   function appearanceRows(lu, gid, upto) {
@@ -189,8 +270,11 @@ var LineupCore = (function () {
     buildPeriods: buildPeriods,
     applySub: applySub,
     applyKeeperSwap: applyKeeperSwap,
+    applyFormatOff: applyFormatOff,
+    applyFormatOn: applyFormatOn,
     applyPosSwap: applyPosSwap,
     ensureApp: ensureApp,
+    playedThrough: playedThrough,
     appearanceRows: appearanceRows,
     positionTotals: positionTotals,
     posCount: posCount,

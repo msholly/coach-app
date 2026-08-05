@@ -207,3 +207,49 @@ test("positionTotals = archive cache + current game, per decision 6's honest fra
     .reduce((a, r) => a + r.frac, 0);
   assert.equal(Math.round(tot[id].D * 10) / 10, Math.round((4.7 + inGame) * 10) / 10);
 });
+
+test("applyFormatOff/On: keeper off mid-period, reversible to the same ledger (t5)", () => {
+  const lu = buildGame(freshCareer(), { N: 6, keeper: true });
+  lu.keeper = true; // app.js stamps this at build
+  const gk = lu.gk[0];
+  const off = lu.periods[0].find((id) => id !== gk);
+  const snap = {
+    actual: { ...lu.actual }, gkActual: { ...lu.gkActual },
+    field: lu.periods[0].slice().sort(),
+  };
+  const res = LC.applyFormatOff(lu, 0, off, 0.4); // 40% of the period left
+  assert.ok(res);
+  assert.equal(res.gk, gk);
+  assert.equal(lu.keeper, false);
+  assert.equal(lu.gk[0], null);
+  assert.equal(lu.periods[0].includes(off), false);
+  assert.equal(lu.periods[0].length, 5);
+  // the keeper keeps the goal time already earned and plays out the rest
+  assert.equal(Math.round(lu.gkActual[gk] * 10) / 10, 0.6);
+  assert.equal(LC.posInPeriod(lu, 0, gk), "D");
+  // the benched player keeps what they played
+  assert.equal(Math.round((snap.actual[off] - lu.actual[off]) * 10) / 10, 0.4);
+  // the undo restores every ledger exactly
+  assert.ok(LC.applyFormatOn(lu, 0, off, res.offPos, res.gk, 0.4));
+  assert.equal(lu.keeper, true);
+  assert.equal(lu.gk[0], gk);
+  assert.deepEqual(lu.periods[0].slice().sort(), snap.field);
+  for (const id of Object.keys(snap.actual))
+    assert.equal(Math.round(lu.actual[id] * 10) / 10, Math.round(snap.actual[id] * 10) / 10, id);
+  assert.equal(Math.round(lu.gkActual[gk] * 10) / 10, Math.round(snap.gkActual[gk] * 10) / 10);
+  assert.equal(LC.posInPeriod(lu, 0, gk), "GK");
+});
+
+test("applyFormatOff: benching the keeper empties the goal", () => {
+  const lu = buildGame(freshCareer(), { N: 6, keeper: true });
+  lu.keeper = true;
+  const gk = lu.gk[0];
+  const before = lu.actual[gk];
+  const res = LC.applyFormatOff(lu, 0, gk, 0.5);
+  assert.ok(res);
+  assert.equal(res.gk, gk);
+  assert.equal(lu.gk[0], null);
+  assert.equal(lu.periods[0].includes(gk), false);
+  assert.equal(Math.round(lu.gkActual[gk] * 10) / 10, 0.5);
+  assert.equal(Math.round((before - lu.actual[gk]) * 10) / 10, 0.5);
+});

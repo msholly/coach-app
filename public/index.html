@@ -20,61 +20,49 @@
 <div class="wrap">
 <div class="app">
 
-  <header class="board">
-    <div class="brandrow">
-      <div class="crest" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4" opacity=".6"/><circle cx="12" cy="12" r="3.4" fill="currentColor" stroke="none"/></svg>
-      </div>
-      <div class="brand">
-        <h1 id="hdrTitle">Coach's Sideline</h1>
-        <div class="sub">U8 AYSO · 6v6 w/ keeper · Everyone plays</div>
-      </div>
-      <span class="spacer"></span>
-      <span class="synctools" id="syncTools" hidden>
-        <span class="syncpill" id="syncPill" data-state="local"><span class="syncdot"></span><span id="syncText">Local only</span></span>
-        <select id="teamSel" class="teamsel no-print" aria-label="Switch team" hidden></select>
-      </span>
-    </div>
-
-    <nav class="tabs" role="tablist" aria-label="Coaching tools">
-      <button class="tab" role="tab" data-tab="lineup" aria-selected="true"><span class="dot"></span>Roster &amp; Lineup</button>
-      <button class="tab" role="tab" data-tab="practice" aria-selected="false"><span class="dot"></span>Practice</button>
-      <button class="tab" role="tab" data-tab="drills" aria-selected="false"><span class="dot"></span>Drill Library</button>
-      <button class="tab" role="tab" data-tab="game" aria-selected="false"><span class="dot"></span>Game Day</button>
-      <button class="tab" role="tab" data-tab="rules" aria-selected="false"><span class="dot"></span>Rules</button>
-    </nav>
-  </header>
-
   <main>
     <!-- ===================== LINEUP ===================== -->
     <section class="panel active" id="p-lineup" role="tabpanel">
       <div class="grid2">
         <div class="card">
           <h2><span class="num">1</span>Team roster</h2>
-          <p class="lead">Your team is built in — it loads on every device that opens this link. Tap <b>IN / OUT</b> to mark who showed up before you build the lineup. Add or remove players anytime; changes save on this device.</p>
+          <button class="btn golive no-print" id="goLive" data-act="go-live" hidden></button>
+          <p class="lead">Your team is built in — it loads on every device that opens this link. Tap a player's row to cycle <b>IN → LATE → OUT</b> before you build the lineup. Add or remove players anytime; changes save on this device.</p>
           <div class="row no-print" style="margin-bottom:12px">
             <div style="flex:3 1 160px">
               <label class="fld" for="teamName">Team name</label>
               <input type="text" id="teamName" placeholder="e.g. Thunder" autocomplete="off">
             </div>
+            <!-- Set by hand for now. GameChanger publishes no write API and only an
+                 unofficial read one, so nothing auto-fills this today. -->
+            <div style="flex:1 1 110px">
+              <label class="fld" for="venue">This game</label>
+              <select id="venue">
+                <option value="home">Home</option>
+                <option value="away">Away</option>
+              </select>
+            </div>
             <button class="btn ghost" id="copyLink" data-act="copy-link" style="flex:0 0 auto" hidden>🔗 Copy team link</button>
-          </div>
-          <div class="row no-print" style="margin-bottom:12px">
-            <div style="flex:3 1 160px">
-              <label class="fld" for="seasonName">Season</label>
-              <input type="text" id="seasonName" placeholder="e.g. Fall 2026" autocomplete="off">
-            </div>
-            <button class="btn ghost" data-act="new-season" style="flex:0 0 auto" title="Reset the fairness ledgers; games stay in the archive">Start new season</button>
-          </div>
-          <div class="row no-print" style="margin-bottom:12px">
-            <div style="flex:3 1 160px">
-              <label class="fld" for="newName">Add player</label>
-              <input type="text" id="newName" placeholder="First name" autocomplete="off">
-            </div>
-            <button class="btn" data-act="add-player" style="flex:0 0 auto">Add</button>
           </div>
           <ul class="roster" id="rosterList"></ul>
           <div class="hint" id="presentCount" style="margin-top:10px"></div>
+          <details class="roster-manage no-print">
+            <summary>Season &amp; roster</summary>
+            <div class="row no-print" style="margin-top:12px;margin-bottom:12px">
+              <div style="flex:3 1 160px">
+                <label class="fld" for="seasonName">Season</label>
+                <input type="text" id="seasonName" placeholder="e.g. Fall 2026" autocomplete="off">
+              </div>
+              <button class="btn ghost" data-act="new-season" style="flex:0 0 auto" title="Reset the fairness ledgers; games stay in the archive">Start new season</button>
+            </div>
+            <div class="row no-print">
+              <div style="flex:3 1 160px">
+                <label class="fld" for="newName">Add player</label>
+                <input type="text" id="newName" placeholder="First name" autocomplete="off">
+              </div>
+              <button class="btn" data-act="add-player" style="flex:0 0 auto">Add</button>
+            </div>
+          </details>
         </div>
 
         <div class="card">
@@ -130,14 +118,15 @@
 
     <!-- ===================== PRACTICE ===================== -->
     <section class="panel" id="p-practice" role="tabpanel">
-      <div class="card">
+      <div class="card flat">
         <h2><span class="num">3</span>Practice plan</h2>
-        <p class="lead">Keep it short and busy — 60 minutes, as many touches per kid as you can fit, minimal standing in line. Add drills from the <b>Drill Library</b>, set the minutes, drag the order with the arrows.</p>
+        <p class="lead">Keep it short and busy — 60 minutes, as many touches per kid as you can fit, minimal standing in line. Add drills from the <b>Drill Library</b>, set the minutes, reorder with the ↑ ↓ buttons.</p>
         <div class="row no-print" style="margin-bottom:6px">
           <button class="btn ghost" data-act="template-practice" style="flex:0 0 auto">✨ Suggest a 60-min plan</button>
           <button class="btn ghost" data-act="clear-practice" style="flex:0 0 auto">Clear</button>
           <button class="btn ghost no-print" data-act="print-practice" style="flex:0 0 auto">🖨 Print</button>
         </div>
+        <div class="burn no-print" id="burnBox"></div>
         <ol class="plan" id="planList"></ol>
         <div id="planEmpty" class="empty" style="display:none">No drills yet. Hit <b>Suggest a 60-min plan</b>, or add drills from the library.</div>
         <div class="plan-total">
@@ -166,71 +155,96 @@
 
     <!-- ===================== GAME DAY ===================== -->
     <section class="panel" id="p-game" role="tabpanel">
+      <!-- Outside .gd-grid on purpose: a sticky element can only stick within its
+           own parent's box, so inside the left column it scrolled away with the
+           scoreboard. As a child of the panel it stays pinned for the whole tab. -->
+      <div class="clock-band no-print" id="clockBand" hidden>
+        <div class="cb-body">
+          <div class="cb-note" id="bandNote">⏸ CLOCK STOPPED — TAP START</div>
+          <div class="clock-big tnum stopped" id="bandClock">10:00</div>
+        </div>
+        <button class="btn btn-start" id="bandBtn" data-act="timer-toggle">▶ Start</button>
+      </div>
+
       <div class="gd-grid">
         <div>
           <div class="scoreboard">
             <div class="sb-top">
-              <span>Game Day</span>
-              <span class="period-pill" id="periodPill">Period 1</span>
+              <span class="pill caps period-pill" id="periodPill">Period 1</span>
+              <button class="pill caps pnext no-print" data-act="period-next" title="End this period">Period +</button>
+              <span class="sp"></span>
+              <span class="ends tnum" id="endsAt"></span>
             </div>
-            <div class="clock-big tnum" id="clock">10:00</div>
-            <div class="clock-note" id="clockNote" hidden>⏸ CLOCK STOPPED — tap Start</div>
-            <div class="ends tnum" id="endsAt"></div>
+            <div class="clock-wrap">
+              <button class="clock-tag reset no-print" id="resetTag" data-act="timer-reset" title="Reset the period clock">↺ Reset</button>
+              <button class="clock-hit" data-act="clock-edit" title="Edit the clock">
+                <span class="clock-big tnum" id="clock">10:00</span>
+                <span class="clock-tag edit">Edit</span>
+              </button>
+            </div>
             <div class="score">
-              <div class="team">
-                <div class="nm" id="usName">Comets</div>
-                <div class="val tnum" id="usScore">0</div>
+              <div class="team us">
+                <div class="t-row"><span class="nm" id="usName">Our team</span><span class="venue" id="usVenue">Home</span><span class="val tnum" id="usScore">0</span></div>
                 <div class="sc-btns"><button data-act="score" data-side="us" data-d="-1">−</button><button data-act="score" data-side="us" data-d="1">+</button></div>
               </div>
-              <div class="colon">:</div>
-              <div class="team">
-                <div class="nm">Visitors</div>
-                <div class="val tnum" id="themScore">0</div>
+              <div class="team them">
+                <div class="t-row"><span class="nm">Visitors</span><span class="val tnum" id="themScore">0</span></div>
                 <div class="sc-btns"><button data-act="score" data-side="them" data-d="-1">−</button><button data-act="score" data-side="them" data-d="1">+</button></div>
               </div>
             </div>
             <div class="gd-controls">
               <button class="btn btn-start" data-act="timer-toggle" id="timerBtn">▶ Start</button>
-              <button class="btn btn-reset" data-act="period-next">Period +</button>
-              <button class="btn btn-reset" data-act="timer-reset">Reset</button>
+              <button class="btn ghost lk-btn no-print" data-act="lock-on" title="Pocket lock — the clock keeps running, taps do nothing">🔒 Lock</button>
             </div>
           </div>
-          <div class="bench-note" id="benchNote"></div>
           <div class="nudge" id="blowoutNudge" hidden></div>
         </div>
 
         <div>
           <div class="field-mini">
-            <h3>On the field <span id="ofPeriod" style="opacity:.7;font-size:11px"></span></h3>
+            <h3><span id="fmTitle">On the field</span><span class="fm-hint" id="fmHint" hidden></span></h3>
             <div class="onfield" id="onFieldChips"><span class="hint" style="color:rgba(255,255,255,.7)">Build a lineup first to see who's on.</span></div>
+            <div class="bench-note" id="benchNote"></div>
             <div class="subline" id="subLine"></div>
           </div>
 
-          <div class="card no-print" id="gkCard" style="margin-top:16px" hidden>
-            <h2><span class="num">🧤</span>Keeper swap</h2>
-            <p class="lead">Swap who's in goal without anyone leaving the field. Time in goal is credited to the minute, so the one-period cap stays honest.</p>
-            <div class="row">
-              <div><label class="fld" for="gkSel">New keeper</label><select id="gkSel"></select></div>
-              <button class="btn" data-act="gk-swap" style="flex:0 0 auto">Make keeper</button>
+          <div class="card no-print" id="fmtCard" style="margin-top:16px" hidden>
+            <h2><span class="num">⚙</span>Game format<span class="fmt-when tnum" id="fmtWhen"></span></h2>
+            <div class="fmt-seg">
+              <button data-act="fmt-mode" data-mode="keeper" id="fmtBtnKeeper">Keeper</button>
+              <button data-act="fmt-mode" data-mode="none" id="fmtBtnNone">No keeper</button>
             </div>
+            <div id="fmtBody"></div>
           </div>
 
-          <div class="card no-print subnow" id="subNow" style="margin-top:16px" hidden>
-            <h2><span class="num">⇄</span>Sub now</h2>
-            <p class="lead">Injury, safety, or any swap that isn't on the sheet. The rest of this period gets credited to whoever comes on, so the season totals stay honest.</p>
-            <div class="row">
-              <div><label class="fld" for="subOut">Coming off</label><select id="subOut"></select></div>
-              <div><label class="fld" for="subIn">Going on</label><select id="subIn"></select></div>
-              <button class="btn" data-act="sub-now" style="flex:0 0 auto">Swap</button>
-            </div>
+          <div class="row no-print" id="fmtChip" style="align-items:center;margin:12px 0" hidden>
+            <span class="hint">Format: <b id="fmtLabel">With keeper</b></span>
+            <button class="btn ghost sm" data-act="fmt-open" style="flex:0 0 auto">Change</button>
           </div>
 
-          <div class="card no-print" id="logCard" style="margin-top:16px" hidden>
-            <h2><span class="num">☰</span>Game log</h2>
-            <p class="lead">This season's games, straight from the archive. Tap one for its goals, subs and clock events.</p>
-            <div id="seasonLog"></div>
+          <div class="card band no-print fixcard" id="fixCard" hidden>
+            <h2><span class="num cone">↩</span>Fix a mistake</h2>
+            <p class="lead">Undo something you just tapped in <b>this</b> game — the last few goals, shots, subs, keeper changes and clock edits. Nothing here deletes anything: each fix is recorded as its own correction, so the season totals stay honest. Finished games live on the <b>Season</b> tab.</p>
+            <div class="qf" id="quickFixes"></div>
+            <div class="fix-sub" id="recentHead" hidden>Recent actions</div>
+            <div id="recentFixes"></div>
           </div>
         </div>
+      </div>
+
+      <dialog id="clkDialog" class="sheet"></dialog>
+      <dialog id="goalDialog" class="sheet"></dialog>
+    </section>
+
+    <!-- ===================== SEASON ===================== -->
+    <section class="panel" id="p-season" role="tabpanel">
+      <div class="card" id="logCard">
+        <h2><span class="num">☰</span>Season archive</h2>
+        <p class="lead">Every game you have played this season, newest first — final score, and the full record of goals, shots, subs, keeper changes and clock events. Read-only history; to correct something in the game happening right now, use <b>Fix a mistake</b> on Game Day.</p>
+        <div class="sec-head">Season leaders</div>
+        <div id="seasonLeaders"></div>
+        <div class="sec-head">Games</div>
+        <div id="seasonLog"></div>
       </div>
     </section>
 
@@ -318,6 +332,47 @@
     </section>
   </main>
 
+  <nav class="fabnav tabs no-print" id="tabNav" aria-label="Coaching tools">
+    <!-- Backdrop: a tap-away must only close the menu. Without it the tap lands
+         on whatever page control sits underneath and fires it. -->
+    <div class="fabback" id="fabBack" hidden></div>
+    <!-- Groups run least-used at the top to most-used at the bottom: the menu
+         opens upward, so the item nearest the FAB is the shortest thumb move. -->
+    <div class="fabmenu" role="tablist">
+      <div class="fabgrp">Reference</div>
+      <button class="tab" role="tab" data-tab="rules" aria-selected="false"><span class="dot"></span>Rules</button>
+      <div class="fabgrp">Training</div>
+      <button class="tab" role="tab" data-tab="drills" aria-selected="false"><span class="dot"></span>Drill Library</button>
+      <button class="tab" role="tab" data-tab="practice" aria-selected="false"><span class="dot"></span>Practice</button>
+      <div class="fabgrp">Team</div>
+      <select id="teamSel" class="teamsel no-print" aria-label="Switch team" hidden></select>
+      <button class="tab" role="tab" data-tab="season" aria-selected="false"><span class="dot"></span>Season</button>
+      <button class="tab" role="tab" data-tab="lineup" aria-selected="true"><span class="dot"></span>Roster &amp; Lineup</button>
+      <div class="fabgrp">Match</div>
+      <button class="tab" role="tab" data-tab="game" aria-selected="false"><span class="dot"></span>Game Day</button>
+    </div>
+    <button class="fab" id="fabToggle" aria-haspopup="true" aria-expanded="false" aria-label="Open navigation">☰</button>
+  </nav>
+
+  <!-- Was a sticky header. It carries no controls the coach needs mid-play, so
+       it sits at the foot of every page and gives the clock the top of the screen. -->
+  <footer class="board">
+    <div class="brandrow">
+      <div class="crest" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4" opacity=".6"/><circle cx="12" cy="12" r="3.4" fill="currentColor" stroke="none"/></svg>
+      </div>
+      <div class="brand">
+        <h1 id="hdrTitle">Coach's Sideline</h1>
+        <div class="sub">U8 AYSO · 6v6 w/ keeper · Everyone plays</div>
+      </div>
+      <span class="spacer"></span>
+      <span class="synctools" id="syncTools" hidden>
+        <button class="pill alertbtn no-print" id="alertBtn" data-act="alerts" aria-pressed="false" title="Push the period-end whistle to your phone (and your watch) even when the screen is locked" hidden>🔕 Wrist alerts off</button>
+        <span class="pill syncpill" id="syncPill" data-state="local"><span class="syncdot"></span><span id="syncText">Local only</span></span>
+      </span>
+    </div>
+  </footer>
+
   <p class="foot-note">
     <b>Everyone Plays.</b> <span id="ruleNote"></span><br>
     <span id="fmtNote"></span> Auto-saves as you go.
@@ -325,7 +380,20 @@
 </div>
 </div>
 
-<div class="toast" id="toast"></div>
+<div class="toaststack" id="toast" aria-live="polite"></div>
+<!-- every confirmation in the app: confirm()/prompt() freeze the page and the
+     game clock's own repaint along with it -->
+<dialog id="askDialog" class="sheet"></dialog>
+
+<!-- Pocket lock. Covers everything so a hand or a pocket can't tap the app;
+     the clock underneath keeps running and still sounds the period alarm. -->
+<div class="lockscreen no-print" id="lockScreen" role="dialog" aria-label="Locked — press and hold to unlock" hidden>
+  <div class="lk-period" id="lkPeriod">Period 1</div>
+  <div class="lk-clock tnum display" id="lkClock">10:00</div>
+  <div class="lk-score tnum" id="lkScore">0 – 0</div>
+  <div class="lk-hint">🔒 Press and hold to unlock</div>
+  <div class="lk-bar" aria-hidden="true"><i></i></div>
+</div>
 
 <script src="/drills.js"></script>
 <script src="/diagram.js"></script>

@@ -1,0 +1,14 @@
+# Local secrets for `wrangler dev`. Copy to `.dev.vars` and fill in.
+# `.dev.vars` is gitignored — never commit real values.
+# In production these are set with: npx wrangler secret put <NAME>
+
+# Web push (period-end whistle). Generate a VAPID keypair and paste the private JWK.
+VAPID_PRIVATE_JWK={"kty":"EC","crv":"P-256","d":"...","x":"...","y":"..."}
+VAPID_SUBJECT=mailto:you@example.com
+
+# GameChanger team calendar — read-only ICS subscription feed.
+# Get it from the GC app: Team > Schedule > Subscribe / "Copy calendar link".
+# The `token` query parameter is a BEARER CREDENTIAL: anyone holding this URL can
+# read the team's schedule. It is used only server-side (GET /api/team/:id/schedule)
+# and is never sent to the browser. Rotate by re-subscribing in GameChanger.
+GC_ICS_URL=webcal://api.team-manager.gc.com/ics-calendar-documents/user/<userId>.ics?teamId=<teamId>&token=<token>

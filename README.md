@@ -36,8 +36,43 @@ coach's phone. Same link = same synced team.
 
 ```bash
 npm run db:init:local     # applies schema to a local (miniflare) D1
+cp .dev.vars.example .dev.vars   # then fill in — .dev.vars is gitignored
 npm run dev               # wrangler dev — open the printed http://localhost:PORT
 ```
+
+`.dev.vars` is only read at **startup** — restart `wrangler dev` after editing it.
+
+## Schema migrations
+
+`schema.sql` is all `CREATE TABLE IF NOT EXISTS`, so re-running it will **not** add a
+column to a table that already exists. A new column needs an edit to `schema.sql` (for
+fresh databases) *and* a numbered file in `migrations/` (for existing ones):
+
+```bash
+npx wrangler d1 execute coach-sideline-db --local  --file=./migrations/0001_games_venue.sql
+npx wrangler d1 execute coach-sideline-db --remote --file=./migrations/0001_games_venue.sql
+```
+
+## GameChanger schedule (optional, read-only)
+
+GameChanger publishes a per-team **ICS subscription feed** — the only integration point it
+offers; there is no write API. `GET /api/team/:id/schedule` proxies it and returns parsed
+events, including `venue` (`"home"`/`"away"`/`null`) and `opponent` derived from the event
+summary (`Team vs X` = home, `Team @ X` = away; anything else stays `null`).
+
+```bash
+npx wrangler secret put GC_ICS_URL     # production
+# local: GC_ICS_URL=... in .dev.vars
+```
+
+**The feed URL's `token` parameter is a bearer credential** — anyone holding the URL can read
+the team's schedule. It lives only in the secret, is used only server-side, and never reaches
+the browser or the repo. Every error path runs through `redact()` so a failed subrequest
+cannot echo it back. Rotate it by re-subscribing in GameChanger.
+
+Note: GC advertises `X-PUBLISHED-TTL` of 5 hours and the feed lags edits made in the app, so
+treat it as a planning aid, not a game-morning source of truth. The manual **This game**
+selector on Roster & Lineup stays authoritative.
 
 ## Test
 
@@ -78,3 +113,6 @@ loss. Pulls that find a newer server revision adopt it and re-render.
 - `PUT /api/team/:id` body `{ doc, baseRev }` → `{ id, rev, updatedAt }`; **409** on stale
   `baseRev` (returns current doc) unless `?force=1`. `id` = `[A-Za-z0-9_-]{8,64}`; `doc` must
   be a JSON string ≤ 512 KB.
+- `GET /api/team/:id/schedule` → `{ calendar, events:[{ uid, startsAt, endsAt, summary,
+  location, description, venue, opponent }] }`. **501** when `GC_ICS_URL` isn't set, **502**
+  if the feed is unreachable or isn't a calendar. Never returns the feed URL or its token.

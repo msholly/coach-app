@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS games (
   started_at  INTEGER NOT NULL,
   ended_at    INTEGER,
   opponent    TEXT,
+  venue       TEXT,                           -- "home" | "away", NULL on rows written before this column
   us          INTEGER NOT NULL DEFAULT 0,
   them        INTEGER NOT NULL DEFAULT 0,
   periods     INTEGER NOT NULL,
@@ -58,3 +59,14 @@ CREATE TABLE IF NOT EXISTS appearances (
   PRIMARY KEY (game_id, player_id, period, pos)
 );
 CREATE INDEX IF NOT EXISTS ix_app_player ON appearances(player_id, pos);
+
+-- Web push endpoints, one row per installed PWA that opted in. The whole
+-- PushSubscription is kept as JSON so the keys are already there if the push
+-- payload ever needs encrypting; today's sends are payload-less (VAPID only).
+CREATE TABLE IF NOT EXISTS push_subs (
+  endpoint   TEXT    PRIMARY KEY,          -- the push service URL, unique per install
+  team_id    TEXT    NOT NULL,
+  sub        TEXT    NOT NULL,             -- JSON PushSubscription
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_push_team ON push_subs(team_id);

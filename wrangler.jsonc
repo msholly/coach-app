@@ -21,6 +21,14 @@
     }
   ],
 
+  // One alarm-holding object per team. It exists only because a locked phone
+  // runs no JS of ours: the whistle has to come from the server. SQLite backend
+  // because that is the only kind the Workers Free plan allows.
+  "durable_objects": {
+    "bindings": [{ "name": "GAME_CLOCK", "class_name": "GameClock" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GameClock"] }],
+
   "observability": { "enabled": true }
 
   // To serve at coach.mitchellsholly.com:

@@ -1,4 +1,31 @@
 {
-  "suggestions": [],
-  "generated_at": null
+  "generated_at": "2026-08-04T16:26:43.939Z",
+  "achievements": [
+    "Header slim-down shipped: h1 now shows team name (fallback \"Coach's Sideline\"), ethos badge removed, sync pill inlined, copyLink relocated to roster card, compact mobile CSS — verified with desktop+mobile screenshots and 9/9 worker tests passing",
+    "Practice drill titles now deep-link to their Drill Library card (view-drill action + id anchors) — verified headless (tab switch + scroll PASS)",
+    "Before-kickoff card moved from Game Day to Roster & Lineup grid2 — verified via designqc screenshot",
+    "GameChanger integration research completed: confirmed no write API exists; documented recommendation of human score relay + one-way ICS schedule pull",
+    "Bug-tidy plan drafted (plan-some-smaller-bug-tidy-canyon.md) and two designqc capture rounds run (8 screenshots staged for evaluation)"
+  ],
+  "improvements": [
+    "Promote the throwaway verify-drill-link.mjs headless check out of the Temp scratchpad into test/ as a repeatable test — it currently lives in AppData\\Local\\Temp and will be garbage-collected, losing regression coverage for the drill-link feature",
+    "public/app.js is ~15.5k tokens with 21+ functions in one file; follow the lineup-core.js pattern (pure module + test) by extracting the next cohesive chunk (e.g. drill-library/view routing) only when you next touch it — no big-bang refactor needed",
+    "Exclude .wrangler/ state/tmp artifacts (sqlite-shm/wal, bundle dirs) from anatomy.md tracking and confirm they're gitignored — they add ~60k tokens of pure noise to the file index",
+    "Deduplicate game-day-ui-plan.md, which exists in both docs/ and github-repo-coach-app-connection/project/uploads/ — pick docs/ as canonical",
+    "After the header slim-down, audit app.css (57 CSS vars, 10 media queries) for now-unused variables and rules from the removed ethos badge / old header layout"
+  ],
+  "next_tasks": [
+    "Evaluate the 6 sectioned designqc screenshots already captured in .wolf/designqc-captures/ (logged as \"ready for eval\") and turn findings into concrete UI fixes",
+    "Execute plan-some-smaller-bug-tidy-canyon.md — the bug-tidy plan was written but no fixes from it appear in the memory log yet",
+    "Commit the pending working-tree changes: the repo has a single commit, plus the doc move (Fall 2026 U8 guide → docs/) and the untracked github-repo-coach-app-connection/ directory need to be either committed or ignored deliberately",
+    "Implement the one-way ICS schedule pull from GameChanger per the research conclusion (skip any write-path work — confirmed impossible)",
+    "Decide scope on docs/voice-game-log-plan.md (~13k-token plan for voice event log + LLM reporting): schedule a first slice or explicitly park it"
+  ],
+  "risks": [
+    "Everything lives on master with one commit and uncommitted changes — no rollback points for the header/drill-link/game-day work; a bad edit or disk issue loses verified work",
+    "Feature verification depends on a script in a Temp scratchpad path; once cleaned up, the drill-link behavior has zero automated coverage",
+    "sw.js caches the app shell for offline sideline use — after this week's index.html/app.js/app.css changes, a stale cache version could serve the old UI to coaches in the field; verify the cache name/version was bumped",
+    "buglog.json shows modifications but memory logs no structured bug entries for this week's fixes — the known-fixes knowledge base is drifting from reality, undermining future sessions",
+    "GameChanger sync is structurally one-way; score reporting relies on a human relay step that can silently lapse — worth documenting the manual step in the coaching guide docs"
+  ]
 }

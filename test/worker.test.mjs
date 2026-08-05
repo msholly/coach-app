@@ -121,3 +121,48 @@ test("unknown api path 404s, wrong method 405s", async () => {
   assert.equal((await worker.fetch(req("/api/nope"), env())).status, 404);
   assert.equal((await worker.fetch(req(`/api/team/${ID}`, { method: "DELETE" }), env())).status, 405);
 });
+
+/* ---------- web push: VAPID (RFC 8292) ---------- */
+// The signature is the whole security story of a payload-less push, so it gets
+// verified against the public key the header advertises, not just eyeballed.
+import { vapidAuth } from "../src/worker.js";
+
+const b64uToBytes = (s) => {
+  const t = s.replace(/-/g, "+").replace(/_/g, "/");
+  return Buffer.from(t + "=".repeat((4 - (t.length % 4)) % 4), "base64");
+};
+
+async function vapidEnv() {
+  const kp = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]);
+  const jwk = await crypto.subtle.exportKey("jwk", kp.privateKey);
+  return { env: { VAPID_PRIVATE_JWK: JSON.stringify(jwk), VAPID_SUBJECT: "mailto:coach@example.com" }, kp };
+}
+
+test("vapidAuth signs a JWT that verifies against the advertised public key", async () => {
+  const { env } = await vapidEnv();
+  const { auth, pub } = await vapidAuth(env, "https://web.push.apple.com/abc123");
+
+  const m = auth.match(/^vapid t=([^,]+), k=(.+)$/);
+  assert.ok(m, "header must be `vapid t=<jwt>, k=<pubkey>`");
+  assert.equal(m[2], pub);
+
+  const [head, body, sig] = m[1].split(".");
+  const pubKey = await crypto.subtle.importKey(
+    "raw", b64uToBytes(pub), { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"]
+  );
+  const ok = await crypto.subtle.verify(
+    { name: "ECDSA", hash: "SHA-256" }, pubKey,
+    b64uToBytes(sig), new TextEncoder().encode(head + "." + body)
+  );
+  assert.equal(ok, true, "signature must verify with the key in the k= parameter");
+});
+
+test("vapidAuth scopes the token to the push service origin and expires within 24h", async () => {
+  const { env } = await vapidEnv();
+  const { auth } = await vapidAuth(env, "https://fcm.googleapis.com/fcm/send/xyz?a=1");
+  const claims = JSON.parse(b64uToBytes(auth.split(" ")[1].slice(2, -1).split(".")[1]).toString());
+  assert.equal(claims.aud, "https://fcm.googleapis.com", "aud is the origin only, no path");
+  assert.equal(claims.sub, "mailto:coach@example.com");
+  const ttl = claims.exp - Math.floor(Date.now() / 1000);
+  assert.ok(ttl > 0 && ttl <= 24 * 3600, `exp must be inside the spec's 24h window, got ${ttl}s`);
+});

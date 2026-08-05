@@ -9,6 +9,12 @@ const GID_RE = /^[A-Za-z0-9_-]{4,80}$/;  // client-generated game/event ids
 const BATCH_MAX = 500;                   // one bad client must not insert unbounded rows
 const POS = new Set(["GK", "D", "F"]);
 
+// Strip anything that looks like a credential out of text bound for a response
+// or a log line. The GameChanger calendar URL carries a bearer token in its
+// query string, and a thrown fetch error quotes the URL it was given.
+const SECRETISH = /([?&](?:token|key|auth|access_token|sig)=)[^&\s"']+/gi;
+const redact = (s) => String(s == null ? "" : s).replace(SECRETISH, "$1[redacted]");
+
 const json = (obj, status = 200, extra = {}) =>
   new Response(JSON.stringify(obj), {
     status,
@@ -46,7 +52,7 @@ export default {
 
       // /api/team/:id/(games|events|appearances|positions)[/:gid] — the
       // append-only archive beside the live doc. Same ID_RE trust boundary.
-      const m2 = path.match(/^\/api\/team\/([^/]+)\/(games|events|appearances|positions)(?:\/([^/]+))?$/);
+      const m2 = path.match(/^\/api\/team\/([^/]+)\/(games|events|appearances|positions|stats|push|alarm|schedule)(?:\/([^/]+))?$/);
       if (m2) {
         const id = decodeURIComponent(m2[1]);
         if (!ID_RE.test(id)) return json({ error: "bad_team_id" }, 400);
@@ -58,12 +64,19 @@ export default {
         if (kind === "events" && !sub && request.method === "POST") return postEvents(db, id, request);
         if (kind === "appearances" && !sub && request.method === "POST") return postAppearances(db, id, request);
         if (kind === "positions" && !sub && request.method === "GET") return getPositions(db, id, url);
+        if (kind === "stats" && !sub && request.method === "GET") return getStats(db, id, url);
+        if (kind === "push" && !sub && request.method === "POST") return postPushSub(db, id, request);
+        if (kind === "push" && !sub && request.method === "DELETE") return deletePushSub(db, id, request);
+        if (kind === "alarm" && !sub && request.method === "POST") return postAlarm(env, id, request);
+        if (kind === "schedule" && !sub && request.method === "GET") return getSchedule(env, request);
         return json({ error: "method_not_allowed" }, 405);
       }
 
       return json({ error: "not_found" }, 404);
     } catch (err) {
-      return json({ error: "server_error", detail: String(err && err.message || err) }, 500);
+      // redact(): a failed subrequest puts the URL it tried into the message, and
+      // the calendar URL carries a bearer token. Never let one reach a response.
+      return json({ error: "server_error", detail: redact(String(err && err.message || err)) }, 500);
     }
   },
 };
@@ -143,16 +156,20 @@ async function postGame(db, teamId, request) {
   const started = +b.started_at;
   if (!Number.isFinite(started) || started <= 0) return json({ error: "bad_started_at" }, 400);
   const ended = +b.ended_at;
+  // Anything not in this set is stored as NULL — "not recorded" must stay
+  // distinguishable from "home", or every pre-migration row reads as a home game.
+  const venue = b.venue === "home" || b.venue === "away" ? b.venue : null;
   await db.prepare(
-    "INSERT INTO games (id, team_id, season, format, started_at, ended_at, opponent, us, them, periods, onfield, minsper) " +
-    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+    "INSERT INTO games (id, team_id, season, format, started_at, ended_at, opponent, venue, us, them, periods, onfield, minsper) " +
+    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
     "ON CONFLICT(id) DO UPDATE SET season = excluded.season, ended_at = excluded.ended_at, " +
-    "opponent = excluded.opponent, us = excluded.us, them = excluded.them " +
+    "opponent = excluded.opponent, venue = excluded.venue, us = excluded.us, them = excluded.them " +
     "WHERE games.team_id = excluded.team_id"
   ).bind(
     String(b.id), teamId, str(b.season, 64), str(b.format, 16), started,
     Number.isFinite(ended) && ended > 0 ? ended : null,
     b.opponent ? str(b.opponent, 80) : null,
+    venue,
     +b.us || 0, +b.them || 0, +b.periods || 0, +b.onfield || 0, +b.minsper || 0
   ).run();
   return json({ ok: true, id: String(b.id) });
@@ -226,6 +243,38 @@ async function getGameEvents(db, teamId, gid) {
   return json({ events: rs.results || [] });
 }
 
+// Season goal/shot totals per player, netted against their own corrections —
+// the archive is append-only, so an undo is a second row, not a deletion:
+//   goal  → detail.d is +1 or -1, so summing it IS the net
+//   sog   → detail.correction marks the undo, which counts as -1
+// Team goals with no scorer (the plain +/- buttons) carry player_id NULL and
+// are excluded here; the games table already holds the team score.
+async function getStats(db, teamId, url) {
+  const season = url.searchParams.get("season") || "";
+// Assists ride in the scoring row's detail.assistId, so they are a second pass
+// over the same rows keyed on a different player — hence the UNION ALL.
+  const rs = await db.prepare(
+    "SELECT player_id, SUM(goals) AS goals, SUM(assists) AS assists, SUM(shots) AS shots FROM (" +
+    "SELECT player_id, " +
+    "SUM(CASE WHEN kind = 'goal' THEN COALESCE(json_extract(detail, '$.d'), 1) ELSE 0 END) AS goals, " +
+    "0 AS assists, " +
+    "SUM(CASE WHEN kind = 'sog' THEN (CASE WHEN json_extract(detail, '$.correction') IS NULL THEN 1 ELSE -1 END) ELSE 0 END) AS shots " +
+    "FROM game_events " +
+    "WHERE player_id IS NOT NULL AND kind IN ('goal', 'sog') " +
+    "AND game_id IN (SELECT id FROM games WHERE team_id = ? AND season = ?) " +
+    "GROUP BY player_id " +
+    "UNION ALL " +
+    "SELECT json_extract(detail, '$.assistId') AS player_id, 0 AS goals, " +
+    "SUM(COALESCE(json_extract(detail, '$.d'), 1)) AS assists, 0 AS shots " +
+    "FROM game_events " +
+    "WHERE kind = 'goal' AND json_extract(detail, '$.assistId') IS NOT NULL " +
+    "AND game_id IN (SELECT id FROM games WHERE team_id = ? AND season = ?) " +
+    "GROUP BY json_extract(detail, '$.assistId')" +
+    ") GROUP BY player_id"
+  ).bind(teamId, season, teamId, season).all();
+  return json({ stats: rs.results || [] });
+}
+
 // Requirement 3 collapses to this one query, scoped to team AND season.
 // ?exclude= keeps the in-progress game out — the client holds its periods
 // locally and would otherwise double-count them.
@@ -238,4 +287,236 @@ async function getPositions(db, teamId, url) {
     "GROUP BY player_id, pos"
   ).bind(teamId, season, exclude).all();
   return json({ positions: rs.results || [] });
+}
+
+/* ==================== GameChanger schedule (read-only) ====================
+   GameChanger publishes a per-team ICS subscription feed. It is read-only —
+   there is still no write path into GC — and its URL carries a bearer token in
+   the query string, which is why this is a server-side proxy and not a fetch
+   from the browser:
+
+     - the token lives in the GC_ICS_URL secret, never in the client bundle,
+       never in the repo, never in a URL the browser sees;
+     - the browser cannot reach api.team-manager.gc.com directly anyway (CORS);
+     - every error path goes through redact() so a failed subrequest can't
+       echo the token back out.
+
+   Set it with:  npx wrangler secret put GC_ICS_URL
+   Locally:      GC_ICS_URL=... in .dev.vars (gitignored)                    */
+
+// RFC 5545 folds long lines by starting the continuation with a space or tab.
+// Unfold before parsing or a LOCATION longer than 75 octets arrives in pieces.
+function unfoldIcs(text) {
+  return String(text).replace(/\r\n/g, "\n").replace(/\n[ \t]/g, "");
+}
+
+// GameChanger's own convention, and the only place home/away appears:
+//   "Fall 2026 BU8 @ Rangers"  -> away
+//   "Fall 2026 BU8 vs Rangers" -> home
+// Anything else (a practice, a placeholder with no separator) yields null,
+// which the app must treat as "not recorded" rather than defaulting to home.
+function venueFromSummary(summary) {
+  const s = String(summary || "");
+  let m = s.match(/\s+vs\.?\s+(.+)$/i);
+  if (m) return { venue: "home", opponent: m[1].trim() || null };
+  m = s.match(/\s+@\s+(.+)$/);
+  if (m) return { venue: "away", opponent: m[1].trim() || null };
+  return { venue: null, opponent: null };
+}
+
+// ICS UTC stamps: 20260912T170000Z. Returned as ms epoch so the client needs
+// no date library; a floating (non-Z) time is left null rather than guessed.
+function icsDateMs(v) {
+  const m = String(v || "").match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/);
+  if (!m) return null;
+  return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
+}
+
+const unescapeIcs = (v) => String(v || "").replace(/\\n/gi, "\n").replace(/\\([,;\\])/g, "$1");
+
+export function parseIcsEvents(text) {
+  const out = [];
+  const body = unfoldIcs(text);
+  const blocks = body.split("BEGIN:VEVENT").slice(1);
+  for (const raw of blocks) {
+    const block = raw.split("END:VEVENT")[0];
+    const field = (name) => {
+      // properties may carry parameters: DTSTART;TZID=...:20260912T170000
+      const m = block.match(new RegExp("^" + name + "(?:;[^:\\n]*)?:(.*)$", "mi"));
+      return m ? m[1].trim() : "";
+    };
+    const summary = unescapeIcs(field("SUMMARY"));
+    const { venue, opponent } = venueFromSummary(summary);
+    out.push({
+      uid: field("UID") || null,
+      startsAt: icsDateMs(field("DTSTART")),
+      endsAt: icsDateMs(field("DTEND")),
+      summary,
+      location: unescapeIcs(field("LOCATION")) || null,
+      description: unescapeIcs(field("DESCRIPTION")) || null,
+      venue,
+      opponent,
+    });
+  }
+  return out.sort((a, b) => (a.startsAt || 0) - (b.startsAt || 0));
+}
+
+async function getSchedule(env, request) {
+  const raw = env.GC_ICS_URL;
+  if (!raw) return json({ error: "schedule_unavailable", reason: "GC_ICS_URL is not set" }, 501);
+  // The subscribe link is handed out as webcal://; that scheme means nothing to fetch().
+  const target = String(raw).trim().replace(/^webcal:\/\//i, "https://");
+  if (!/^https:\/\//i.test(target)) return json({ error: "schedule_misconfigured" }, 500);
+
+  let res;
+  try {
+    // GC advertises X-PUBLISHED-TTL of 5h; 30 min keeps a same-day change visible
+    // without hammering their endpoint on every page load.
+    res = await fetch(target, {
+      headers: { accept: "text/calendar" },
+      cf: { cacheTtl: 1800, cacheEverything: true },
+    });
+  } catch (err) {
+    return json({ error: "schedule_fetch_failed", detail: redact(String(err && err.message || err)) }, 502);
+  }
+  if (!res.ok) return json({ error: "schedule_fetch_failed", status: res.status }, 502);
+
+  const text = await res.text();
+  if (!/BEGIN:VCALENDAR/i.test(text)) return json({ error: "schedule_not_calendar" }, 502);
+
+  const name = (text.match(/^X-WR-CALNAME:(.*)$/mi) || [])[1];
+  return json(
+    { calendar: name ? unescapeIcs(name.trim()) : null, events: parseIcsEvents(text) },
+    200,
+    // The response body is the coach's own schedule — never a shared/public cache.
+    { "cache-control": "private, max-age=300" }
+  );
+}
+
+/* ============================ web push ============================
+   The period-end alarm has to survive a locked phone, where no JS of ours
+   runs. That means the *server* has to fire at the whistle, so the client
+   registers the deadline with a Durable Object alarm on every clock start
+   and cancels it on every stop.
+
+   ponytail: the push carries NO payload. A payload would have to be
+   encrypted (ECDH + HKDF + AES128GCM against the subscription keys); with
+   VAPID alone the request is just a signed POST with an empty body, and the
+   notification text lives in sw.js. The full PushSubscription is stored
+   anyway, so the day the text needs to vary per event the keys are there. */
+
+const MAX_ENDPOINT = 1024;
+
+const b64uEncode = (buf) => {
+  let s = "";
+  const b = new Uint8Array(buf);
+  for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]);
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+};
+const b64uDecode = (str) => {
+  const s = str.replace(/-/g, "+").replace(/_/g, "/");
+  const bin = atob(s + "=".repeat((4 - (s.length % 4)) % 4));
+  return Uint8Array.from(bin, (c) => c.charCodeAt(0));
+};
+
+// RFC 8292: a JWT signed with the app's VAPID key, plus the public key, so the
+// push service can tell that whoever subscribed is who is now sending.
+export async function vapidAuth(env, endpoint) {
+  const jwk = JSON.parse(env.VAPID_PRIVATE_JWK);
+  const key = await crypto.subtle.importKey("jwk", jwk, { name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
+  const enc = new TextEncoder();
+  const head = b64uEncode(enc.encode(JSON.stringify({ typ: "JWT", alg: "ES256" })));
+  const body = b64uEncode(enc.encode(JSON.stringify({
+    aud: new URL(endpoint).origin,
+    exp: Math.floor(Date.now() / 1000) + 12 * 3600,   // spec caps this at 24h
+    sub: env.VAPID_SUBJECT || "mailto:coach@example.com",
+  })));
+  const sig = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, key, enc.encode(head + "." + body));
+  const pub = b64uEncode(new Uint8Array([4, ...b64uDecode(jwk.x), ...b64uDecode(jwk.y)]));
+  return { auth: `vapid t=${head}.${body}.${b64uEncode(sig)}, k=${pub}`, pub };
+}
+
+// Returns the HTTP status so the caller can prune a subscription the push
+// service has retired (404/410) — those never come back.
+async function sendPush(env, endpoint) {
+  const { auth } = await vapidAuth(env, endpoint);
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: { Authorization: auth, TTL: "600", Urgency: "high", "content-length": "0" },
+  });
+  return res.status;
+}
+
+async function postPushSub(db, id, request) {
+  let body;
+  try { body = await request.json(); } catch { return json({ error: "invalid_json_body" }, 400); }
+  const sub = body && body.sub;
+  const endpoint = sub && sub.endpoint;
+  if (typeof endpoint !== "string" || endpoint.length > MAX_ENDPOINT) return json({ error: "bad_endpoint" }, 400);
+  let u;
+  try { u = new URL(endpoint); } catch { return json({ error: "bad_endpoint" }, 400); }
+  if (u.protocol !== "https:") return json({ error: "bad_endpoint" }, 400);
+
+  await db
+    .prepare("INSERT INTO push_subs (endpoint, team_id, sub, created_at) VALUES (?, ?, ?, ?)"
+      + " ON CONFLICT(endpoint) DO UPDATE SET team_id = excluded.team_id, sub = excluded.sub")
+    .bind(endpoint, id, JSON.stringify(sub), Date.now())
+    .run();
+  return json({ ok: true });
+}
+
+async function deletePushSub(db, id, request) {
+  let body;
+  try { body = await request.json(); } catch { return json({ error: "invalid_json_body" }, 400); }
+  const endpoint = body && body.endpoint;
+  if (typeof endpoint !== "string" || endpoint.length > MAX_ENDPOINT) return json({ error: "bad_endpoint" }, 400);
+  await db.prepare("DELETE FROM push_subs WHERE endpoint = ? AND team_id = ?").bind(endpoint, id).run();
+  return json({ ok: true });
+}
+
+// { at: <ms epoch> } arms the alarm, { at: 0 } cancels it. One Durable Object
+// per team, so a second device starting the clock just moves the same alarm.
+async function postAlarm(env, id, request) {
+  if (!env.GAME_CLOCK) return json({ error: "alarms_unavailable" }, 501);
+  let body;
+  try { body = await request.json(); } catch { return json({ error: "invalid_json_body" }, 400); }
+  const at = Number(body && body.at) || 0;
+  // A far-future alarm would pin a DO forever; a past one would fire instantly.
+  if (at && (at < Date.now() || at > Date.now() + 6 * 3600 * 1000)) return json({ error: "bad_alarm_time" }, 400);
+  const stub = env.GAME_CLOCK.get(env.GAME_CLOCK.idFromName(id));
+  await stub.fetch("https://alarm/set", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ at, team: id }),
+  });
+  return json({ ok: true, at });
+}
+
+export class GameClock {
+  constructor(ctx, env) { this.ctx = ctx; this.env = env; }
+
+  async fetch(request) {
+    const { at, team } = await request.json();
+    if (at > 0) {
+      await this.ctx.storage.put("team", team);
+      await this.ctx.storage.setAlarm(at);
+    } else {
+      await this.ctx.storage.deleteAlarm();
+    }
+    return new Response(null, { status: 204 });
+  }
+
+  async alarm() {
+    const team = await this.ctx.storage.get("team");
+    if (!team) return;
+    const db = this.env.coach_sideline_db || this.env.DB;
+    const { results } = await db.prepare("SELECT endpoint FROM push_subs WHERE team_id = ?").bind(team).all();
+    for (const row of results || []) {
+      let status = 0;
+      try { status = await sendPush(this.env, row.endpoint); } catch { /* a dead push service must not block the rest */ }
+      if (status === 404 || status === 410) {
+        await db.prepare("DELETE FROM push_subs WHERE endpoint = ?").bind(row.endpoint).run();
+      }
+    }
+  }
 }
