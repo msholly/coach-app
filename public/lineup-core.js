@@ -45,19 +45,32 @@ var LineupCore = (function () {
 
   // Season position totals: the cached archive numbers (past games, from D1)
   // plus this game's ledger. `cached` must exclude the current game's rows.
-  function positionTotals(lu, cached) {
+  //
+  // upto/live/rem are the playedThrough discipline applied to a RATIO: a period
+  // the team has not played must not colour "how much defense has this child
+  // had". Omit them and you get the whole-game plan, which is what build-time
+  // ordering wants. Display callers pass (curPi()+1, curPi(), remFrac()).
+  function positionTotals(lu, cached, upto, live, rem) {
     var out = {};
     Object.keys(cached || {}).forEach(function (id) {
       out[id] = { GK: cached[id].GK || 0, D: cached[id].D || 0, F: cached[id].F || 0 };
     });
-    ((lu && lu.app) || []).forEach(function (es) {
+    var app = (lu && lu.app) || [];
+    var n = upto == null ? app.length : Math.min(upto, app.length);
+    var r = Math.min(1, Math.max(0, rem || 0));
+    for (var q = 0; q < n; q++) {
+      var es = app[q] || [], onNow = (q === live && lu.periods[q]) || [];
       es.forEach(function (e) {
-        if (e.frac > 1e-9) {
-          var t = out[e.id] = out[e.id] || { GK: 0, D: 0, F: 0 };
-          t[e.pos] += e.frac;
-        }
+        if (e.frac <= 1e-9) return;
+        var v = e.frac;
+        // Only the entry actually running is trimmed — a swap already cut the
+        // one it replaced down to what it really got (see playedThrough).
+        if (onNow.indexOf(e.id) >= 0 && activeEntry(es, e.id) === e) v -= r;
+        if (v <= 1e-9) return;
+        var t = out[e.id] = out[e.id] || { GK: 0, D: 0, F: 0 };
+        t[e.pos] += v;
       });
-    });
+    }
     return out;
   }
   function posCount(lu, cached, id, pos) {
@@ -102,6 +115,118 @@ var LineupCore = (function () {
     }
   }
 
+  // Redraw the periods after `pi` at a new field size / keeper setting, with the
+  // same tally discipline buildLineup uses: un-tally the future, truncate, rebuild,
+  // re-tally. order = present ids, most-owed first. o: {N, keeper, kept, posTotals}.
+  function redrawFrom(lu, pi, order, o) {
+    tally(lu, pi + 1, -1);
+    lu.periods.length = pi + 1; lu.gk.length = pi + 1; (lu.app = lu.app || []).length = pi + 1;
+    ivTruncate(lu, pi + 1);
+    buildPeriods(lu, order, { keep: pi + 1, Q: lu.Q, N: o.N, keeper: o.keeper, kept: o.kept, posTotals: o.posTotals });
+    tally(lu, pi + 1, 1);
+    lu.N = o.N; lu.keeper = o.keeper; lu.handEdited = true;
+  }
+
+  // The keeper picker writes a FUTURE period's goal, so no played credit moves —
+  // only the plan and its projection ledger do. Returns {out: displaced keeper id
+  // or null} so the caller can log the correction, or false if it can't apply.
+  function setFutureKeeper(lu, q, id) {
+    if (!lu || !lu.keeper || !id) return false;
+    if (!lu.periods[q] || lu.periods[q].indexOf(id) < 0) return false;
+    var old = lu.gk[q];
+    if (old === id) return false;
+    lu.gk[q] = id;
+    if (old) lu.gkActual[old] = (lu.gkActual[old] || 0) - 1;
+    lu.gkActual[id] = (lu.gkActual[id] || 0) + 1;
+    var es = (lu.app || [])[q] || [], eOld = null, eNew = null;
+    es.forEach(function (e) {
+      if (e.id === old && e.pos === "GK") eOld = e;
+      if (e.id === id && e.pos !== "GK") eNew = e;
+    });
+    if (eOld) eOld.pos = eNew ? eNew.pos : "D";   // the old keeper takes the new one's spot
+    if (eNew) eNew.pos = "GK";
+    return { out: old || null };
+  }
+
+  /* ---- interval ledger (8b) ----
+     lu.iv[q] = { id: [[on, off], ...] } — on/off as fractions of period q,
+     off === null while the player is still on. Records WHERE inside a period
+     the minutes happened, which app[] fracs (how much, not when) cannot say.
+     Display-only: fairness, archive rows and the season ledger never read it. */
+  function ivOpen(lu, q) {          // period q kicks off
+    if (!lu) return;
+    lu.iv = lu.iv || [];
+    if (lu.iv[q]) return;           // idempotent — kickoff and Start both call it
+    while (lu.iv.length < q) lu.iv.push({});
+    var m = lu.iv[q] = {};
+    (lu.periods[q] || []).forEach(function (id) { m[id] = [[0, null]]; });
+  }
+  function ivClose(lu, q) {         // period q ends: open intervals close at 1
+    var m = (lu && lu.iv || [])[q]; if (!m) return;
+    Object.keys(m).forEach(function (id) {
+      m[id].forEach(function (v) { if (v[1] == null) v[1] = 1; });
+    });
+  }
+  // The clock-split at t = 1 - frac: outId's open run ends, inId's begins.
+  function ivSub(lu, q, outId, inId, frac) {
+    var m = (lu && lu.iv || [])[q]; if (!m) return;   // period not started: sheet edit, no clock story
+    var t = Math.max(0, Math.min(1, 1 - frac)), open = false;
+    (m[outId] || []).forEach(function (v) { if (v[1] == null) { v[1] = t; open = true; } });
+    // A synthesized ledger (ensureIv) has no open runs — trim the whole-period one.
+    if (!open) (m[outId] || []).forEach(function (v) { if (v[0] <= t && v[1] > t) v[1] = t; });
+    (m[inId] = m[inId] || []).push([t, null]);
+  }
+  function ivTruncate(lu, n) { if (lu && lu.iv) lu.iv.length = Math.min(lu.iv.length, n); }
+  // Older docs have no interval ledger — synthesize whole-period runs for the
+  // periods already played (upto, exclusive), mirroring ensureApp. The live
+  // period gets a closed [0,1] too; consumers clamp it to the clock.
+  function ensureIv(lu, upto) {
+    if (!lu) return;
+    lu.iv = lu.iv || [];
+    var n = Math.min(upto == null ? lu.periods.length : upto, lu.periods.length);
+    for (var q = 0; q < n; q++) {
+      if (lu.iv[q]) continue;
+      var m = lu.iv[q] = {};
+      (((lu.app || [])[q]) || []).forEach(function (e) {
+        if (e.frac > 1e-9 && !m[e.id]) m[e.id] = [[0, 1]];
+      });
+    }
+  }
+  // Elapsed periods actually on the field through the live period. Open runs —
+  // and anything a synthesized ledger closed at 1 — count only up to periodT.
+  function ivPlayed(lu, id, live, periodT) {
+    var iv = (lu && lu.iv) || [], n = 0;
+    for (var q = 0; q < iv.length && q <= live; q++) {
+      ((iv[q] || {})[id] || []).forEach(function (v) {
+        var end = v[1] == null ? (q === live ? periodT : 1) : v[1];
+        if (q === live) end = Math.min(end, periodT);
+        if (end > v[0]) n += end - v[0];
+      });
+    }
+    return n;
+  }
+  // Freshness, not fairness: a mid-period sub still on inside their first two
+  // minutes. Stops a coach scanning for the next sub from pulling the kid who
+  // just arrived. Clears after 2:00 of clock or at the period break.
+  function ivJustOn(lu, id, live, periodT, minsper) {
+    var runs = (((lu && lu.iv) || [])[live] || {})[id] || [];
+    var last = runs[runs.length - 1];
+    return !!(last && last[1] == null && last[0] > 0.001
+      && (periodT - last[0]) * (minsper || 10) * 60 < 120);
+  }
+  // The verdict: does the arithmetic on the guide's minimum (3 of 4 → Q-1 of Q)
+  // and states the conclusion in words. First match wins; a negative number is
+  // never printed. el = periods elapsed, e.g. 1.4.
+  function minVerdict(P, Q, el) {
+    var r1 = function (v) { return Math.round(v * 10) / 10; };
+    var MIN = Q > 1 ? Q - 1 : Q;
+    var rem = Q - el, need = Math.max(0, MIN - P), slack = rem - need;
+    if (P >= MIN - 0.001) return { k: "met", label: "✓ min met" };
+    if (need > rem + 0.001) return { k: "short", label: "short " + r1(need - rem) + "p" };
+    if (slack < 0.5) return { k: "on", label: "on from now" };
+    return { k: "spare", label: "+" + r1(slack) + "p spare" };
+  }
+
   // Bench→field sub. frac = the fraction of the period the incoming player gets.
   function applySub(lu, pi, outId, inId, frac) {
     if (!lu || !outId || !inId || outId === inId) return false;
@@ -119,6 +244,7 @@ var LineupCore = (function () {
     }
     var es = appOf(lu, pi), act = activeEntry(es, outId);
     if (act) { act.frac -= frac; addFrac(es, inId, act.pos, frac); }
+    ivSub(lu, pi, outId, inId, frac);
     return true;
   }
 
@@ -165,6 +291,8 @@ var LineupCore = (function () {
     }
     lu.actual[offId] = (lu.actual[offId] || 0) - frac;
     lu.periods[pi].splice(lu.periods[pi].indexOf(offId), 1);
+    var m = (lu.iv || [])[pi], t = Math.max(0, Math.min(1, 1 - frac));
+    if (m) (m[offId] || []).forEach(function (v) { if (v[1] == null) v[1] = t; });
     lu.keeper = false;
     return { gk: gk || null, offPos: offPos };
   }
@@ -178,6 +306,8 @@ var LineupCore = (function () {
     lu.periods[pi].push(onId);
     lu.actual[onId] = (lu.actual[onId] || 0) + frac;
     addFrac(es, onId, onPos, frac);
+    var m = (lu.iv || [])[pi];
+    if (m) (m[onId] = m[onId] || []).push([Math.max(0, Math.min(1, 1 - frac)), null]);
     if (gkId && lu.periods[pi].indexOf(gkId) >= 0) {
       lu.gk[pi] = gkId;
       lu.gkActual[gkId] = (lu.gkActual[gkId] || 0) + frac;
@@ -230,18 +360,27 @@ var LineupCore = (function () {
   //   rem  = fraction of that period still unplayed (1 before kickoff, 0 at the
   //          whistle, and 0 during a break — the break clock belongs to a
   //          period that is already over)
+  //   pos  = optional "GK"/"D"/"F" filter. Only the entry actually RUNNING is
+  //          discounted: unfiltered, a mid-period swap leaves the two entries
+  //          summing to 1 so a blanket discount is right, but filtered to one
+  //          position that invariant is gone and it would double-charge.
   //
   // Note the two definitions converge at every period boundary (rem = 0), which
   // is where the guide's "3 of 4 quarters" rule is actually judged.
-  function playedThrough(lu, pi, id, live, rem) {
+  function playedThrough(lu, pi, id, live, rem, pos) {
     var app = (lu && lu.app) || [];
     var r = Math.min(1, Math.max(0, rem || 0));
     var last = Math.min(pi, live), n = 0;
     for (var q = 0; q <= last && q < app.length; q++) {
-      var cur = 0;
-      app[q].forEach(function (e) { if (e.id === id && e.frac > 1e-9) cur += e.frac; });
+      var cur = 0, es = app[q];
+      es.forEach(function (e) {
+        if (e.id === id && e.frac > 1e-9 && (!pos || e.pos === pos)) cur += e.frac;
+      });
       if (cur <= 0) continue;
-      if (q === live && ((lu.periods[q] || []).indexOf(id) >= 0)) cur -= r;
+      if (q === live && ((lu.periods[q] || []).indexOf(id) >= 0)) {
+        var act = activeEntry(es, id);
+        if (!pos || (act && act.pos === pos)) cur -= r;
+      }
       if (cur > 0) n += cur;
     }
     return n;
@@ -268,12 +407,21 @@ var LineupCore = (function () {
     posSplit: posSplit,
     tally: tally,
     buildPeriods: buildPeriods,
+    redrawFrom: redrawFrom,
+    setFutureKeeper: setFutureKeeper,
     applySub: applySub,
     applyKeeperSwap: applyKeeperSwap,
     applyFormatOff: applyFormatOff,
     applyFormatOn: applyFormatOn,
     applyPosSwap: applyPosSwap,
     ensureApp: ensureApp,
+    ivOpen: ivOpen,
+    ivClose: ivClose,
+    ivTruncate: ivTruncate,
+    ensureIv: ensureIv,
+    ivPlayed: ivPlayed,
+    ivJustOn: ivJustOn,
+    minVerdict: minVerdict,
     playedThrough: playedThrough,
     appearanceRows: appearanceRows,
     positionTotals: positionTotals,

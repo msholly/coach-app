@@ -614,3 +614,269 @@ Reset moved from `.gd-controls` onto the clock row as an edge tag mirroring Edit
 
 | Time | Action | File(s) | Outcome | ~Tokens |
 |------|--------|---------|---------|--------|
+| 17:34 | Edited public/lineup-core.js | added 8 condition(s) | ~477 |
+| 17:34 | Edited public/lineup-core.js | 2→4 lines | ~35 |
+| 17:34 | Created public/state.js | — | ~872 |
+| 17:34 | Created public/stats.js | — | ~687 |
+| 17:35 | Created public/outbox.js | — | ~916 |
+| 17:35 | Edited public/app.js | removed 42 lines | ~74 |
+| 17:35 | Edited public/app.js | modified redrawFuture() | ~114 |
+| 17:35 | Edited public/app.js | modified pickNextKeeper() | ~122 |
+| 17:35 | Edited public/app.js | modified loadOutbox() | ~106 |
+| 17:36 | Edited public/app.js | removed 39 lines | ~45 |
+| 17:36 | Edited public/app.js | removed 18 lines | ~46 |
+| 17:36 | Edited public/app.js | reduced (-11 lines) | ~58 |
+| 17:36 | Edited public/app.js | parse() → detailOf() | ~17 |
+| 17:36 | Edited public/index.html | 2→5 lines | ~47 |
+| 17:36 | Edited public/sw.js | "sideline-shell-v9" → "sideline-shell-v10" | ~10 |
+| 17:36 | Edited public/sw.js | inline fix | ~49 |
+| 17:37 | Edited test/lineup.test.mjs | expanded (+9 lines) | ~249 |
+| 17:38 | Created test/outbox.test.mjs | — | ~1504 |
+| 17:39 | Created test/state.test.mjs | — | ~1689 |
+| 17:39 | Created test/stats.test.mjs | — | ~1593 |
+| 17:41 | Created ../AppData/Local/Temp/claude/c--Users-msholly-coach-app/30a59926-e265-4ef8-aeba-adfa9b338c6f/scratchpad/drive.mjs | — | ~1608 |
+| 17:42 | Edited ../AppData/Local/Temp/claude/c--Users-msholly-coach-app/30a59926-e265-4ef8-aeba-adfa9b338c6f/scratchpad/drive.mjs | added 1 condition(s) | ~387 |
+| 17:42 | Edited ../AppData/Local/Temp/claude/c--Users-msholly-coach-app/30a59926-e265-4ef8-aeba-adfa9b338c6f/scratchpad/drive.mjs | 35→30 lines | ~384 |
+| 17:43 | Edited ../AppData/Local/Temp/claude/c--Users-msholly-coach-app/30a59926-e265-4ef8-aeba-adfa9b338c6f/scratchpad/drive.mjs | added 1 condition(s) | ~64 |
+| 17:43 | Edited ../AppData/Local/Temp/claude/c--Users-msholly-coach-app/30a59926-e265-4ef8-aeba-adfa9b338c6f/scratchpad/drive.mjs | expanded (+7 lines) | ~199 |
+| 17:43 | Edited ../AppData/Local/Temp/claude/c--Users-msholly-coach-app/30a59926-e265-4ef8-aeba-adfa9b338c6f/scratchpad/drive.mjs | modified log() | ~24 |
+| 17:43 | Edited ../AppData/Local/Temp/claude/c--Users-msholly-coach-app/30a59926-e265-4ef8-aeba-adfa9b338c6f/scratchpad/drive.mjs | 4→5 lines | ~73 |
+| 17:46 | Phase 1 architecture cleanup: extracted state.js/stats.js/outbox.js + redrawFrom/setFutureKeeper into lineup-core.js; app.js 2352->2241 | public/{app,state,stats,outbox,lineup-core,index,sw}.js | 79/79 tests (was 43), 18/18 headless checks, sync round-trip verified | ~95k |
+| 17:46 | Session end: 27 writes across 12 files (lineup-core.js, state.js, stats.js, outbox.js, app.js) | 4 reads | ~56116 tok |
+
+## Session: 2026-08-05 09:43
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-08-05 09:56
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 10:00 | Created test/season.test.mjs | — | ~5120 |
+| 10:01 | Edited test/season.test.mjs | inline fix | ~26 |
+| 10:01 | Edited test/season.test.mjs | modified assertGameInvariants() | ~228 |
+| 10:01 | Edited test/season.test.mjs | 6→6 lines | ~103 |
+| 10:01 | Edited test/season.test.mjs | 2→2 lines | ~33 |
+| 10:01 | Edited test/season.test.mjs | 2→2 lines | ~33 |
+| 10:01 | Edited test/season.test.mjs | 2→2 lines | ~29 |
+| 10:02 | Edited test/season.test.mjs | 4→4 lines | ~58 |
+| 10:03 | Created ../AppData/Local/Temp/claude/c--Users-msholly-coach-app/3c5fbd27-73fa-4a23-8034-919b7c67dc8b/scratchpad/diag.mjs | — | ~960 |
+| 10:04 | Edited schema.sql | 7→8 lines | ~120 |
+| 10:04 | Created migrations/0002_teams_pass.sql | — | ~182 |
+| 10:04 | Edited src/worker.js | expanded (+7 lines) | ~122 |
+| 10:05 | Edited src/worker.js | added error handling | ~2238 |
+| 10:05 | Edited src/worker.js | added 1 condition(s) | ~103 |
+| 10:05 | Edited src/worker.js | added 4 condition(s) | ~271 |
+| 10:05 | Edited wrangler.jsonc | expanded (+8 lines) | ~159 |
+| 10:05 | Created public/_headers | — | ~256 |
+| 10:05 | Edited test/season.test.mjs | modified for() | ~543 |
+| 10:05 | Edited test/season.test.mjs | 4→7 lines | ~155 |
+| 10:05 | Edited test/season.test.mjs | 3→4 lines | ~86 |
+| 10:05 | Edited test/season.test.mjs | 3→4 lines | ~76 |
+| 10:06 | Edited test/season.test.mjs | modified LIMIT() | ~438 |
+| 10:06 | Edited public/app.js | 1→4 lines | ~120 |
+| 10:06 | Edited test/season.test.mjs | 7→7 lines | ~147 |
+| 10:06 | Edited test/season.test.mjs | 4→4 lines | ~86 |
+| 10:06 | Edited public/app.js | added error handling | ~1412 |
+| 10:07 | Edited public/app.js | fetch() → authFetch() | ~72 |
+| 10:07 | Edited public/app.js | fetch() → authFetch() | ~52 |
+| 10:07 | Edited public/app.js | 3→5 lines | ~51 |
+| 10:07 | Edited public/index.html | 1→4 lines | ~124 |
+| 10:07 | Edited public/app.js | added 1 condition(s) | ~27 |
+| 10:07 | Edited public/sw.js | "sideline-shell-v10" → "sideline-shell-v11" | ~10 |
+| 10:07 | Session end: 32 writes across 10 files (season.test.mjs, diag.mjs, schema.sql, 0002_teams_pass.sql, worker.js) | 12 reads | ~71344 tok |
+| 10:08 | Edited test/schedule.test.mjs | 2→6 lines | ~99 |
+| 10:08 | Edited test/schedule.test.mjs | inline fix | ~26 |
+| 10:08 | Edited test/schedule.test.mjs | inline fix | ~33 |
+| 10:08 | Created test/auth.test.mjs | — | ~2647 |
+| 10:08 | Edited test/schedule.test.mjs | 2→2 lines | ~46 |
+| 10:08 | Edited test/schedule.test.mjs | inline fix | ~39 |
+| 10:08 | Edited test/schedule.test.mjs | inline fix | ~37 |
+| 10:10 | Edited README.md | expanded (+32 lines) | ~678 |
+| 10:10 | Edited README.md | 4→6 lines | ~101 |
+| 10:10 | Edited README.md | expanded (+7 lines) | ~179 |
+| 18:35 | Added season-scale simulation tests (~100 seeded games): sub-rec invariants, fairness, keeper rotation, D/F pref floor | test/season.test.mjs | 9/9 pass | ~5800 |
+| 18:35 | Found + documented sub-rec drift (alphabetical tie-break, exact-division rosters) as KNOWN LIMIT test | test/season.test.mjs, .wolf/buglog.json bug-118 | reported, not fixed | ~400 |
+| 18:35 | Fixed pre-existing schedule.test.mjs 500s (auth gate needs DB stub in test env) | test/schedule.test.mjs | full suite 103/103 | ~300 |
+| 10:11 | Session end: 42 writes across 13 files (season.test.mjs, diag.mjs, schema.sql, 0002_teams_pass.sql, worker.js) | 13 reads | ~78492 tok |
+| 10:14 | Created wrangler.verify.jsonc | — | ~243 |
+| 10:16 | Created docs/gamechanger-integration-plan.md | — | ~2634 |
+| 10:16 | Edited public/app.js | modified played() | ~312 |
+| 10:17 | Edited public/sw.js | "sideline-shell-v11" → "sideline-shell-v12" | ~10 |
+| 10:17 | Edited test/season.test.mjs | modified recs() | ~281 |
+| 10:17 | Edited test/season.test.mjs | added 2 condition(s) | ~318 |
+| 10:17 | Adversarial review (3 lenses) of GameChanger/league research; patched plan | docs/gamechanger-integration-plan.md, .wolf/cerebrum.md, .wolf/buglog.json | 3 claims refuted; ICS pull killed, copyRecap() promoted to P0 | ~85k |
+| 10:17 | Created ../AppData/Local/Temp/claude/c--Users-msholly-coach-app/4850b6b0-cbae-44ba-affb-1bf6435dff84/scratchpad/uicheck.mjs | — | ~1310 |
+| 10:17 | Edited test/season.test.mjs | 8→8 lines | ~135 |
+| 10:17 | Edited test/season.test.mjs | 7→7 lines | ~98 |
+| 10:17 | Edited test/season.test.mjs | 2→2 lines | ~26 |
+| 10:17 | Edited test/season.test.mjs | modified for() | ~40 |
+| 10:17 | Edited test/season.test.mjs | modified for() | ~45 |
+| 10:18 | Session end: 54 writes across 16 files (season.test.mjs, diag.mjs, schema.sql, 0002_teams_pass.sql, worker.js) | 13 reads | ~84311 tok |
+
+## Session: 2026-08-05 10:18
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 10:18 | Edited test/season.test.mjs | modified for() | ~356 |
+| 10:18 | Edited test/season.test.mjs | 7→7 lines | ~129 |
+| 10:18 | Edited test/season.test.mjs | 5→5 lines | ~123 |
+| 10:19 | Edited public/app.js | modified if() | ~62 |
+| 10:19 | Edited public/app.js | modified if() | ~66 |
+| 10:19 | Edited public/app.js | modified afterLockChange() | ~96 |
+| 19:00 | Implemented season-owed tie-break in ranked sub lists (bug-118 fix), bumped sw CACHE v12 | public/app.js, public/sw.js | drift 12.4->3.7 aggressive, 6.7->3.3 occasional | ~600 |
+| 19:00 | Mirrored tie-break in sim recs(), added tie-order invariants, flipped KNOWN LIMIT into bug-118 guard, tightened bounds | test/season.test.mjs | 103/103 full suite | ~900 |
+| 10:20 | Session end: 6 writes across 2 files (season.test.mjs, app.js) | 2 reads | ~875 tok |
+| 10:2x | Added optional per-team passphrase login: pass_hash column + migration 0002, /auth routes, gate on every /api/team/:id* route, PBKDF2 10k + HMAC session cookie signed with the hash | schema.sql, migrations/0002_teams_pass.sql, src/worker.js | 103/103 tests, live curl flow green | ~4200 |
+| 10:2x | Client login: ask() gains pass:true (masked, no autocaps), unlock/ensureAuth/authFetch, "Add a passphrase" button beside Copy team link | public/app.js, public/index.html | headless Chrome: lock -> other device prompted -> synced; decline -> local-only | ~2600 |
+| 10:2x | Security headers via native _headers (CSP with no external origins, nosniff, DENY, no-referrer, Permissions-Policy, COOP) + nosniff on API json() | public/_headers, src/worker.js | 0 CSP violations in a real browser run | ~700 |
+| 10:2x | Rate limit binding LOGIN_LIMIT (10/min keyed on team id) on POST /auth only, checked before any D1 read or KDF | wrangler.jsonc, src/worker.js | 429 + retry-after asserted, 0 db hits | ~400 |
+| 10:23 | Session end: 6 writes across 2 files (season.test.mjs, app.js) | 3 reads | ~2984 tok |
+| 10:23 | Created docs/firebase-research.md | — | ~2067 |
+| 10:24 | Session end: 7 writes across 3 files (season.test.mjs, app.js, firebase-research.md) | 4 reads | ~42745 tok |
+| 10:24 | Session end: 7 writes across 3 files (season.test.mjs, app.js, firebase-research.md) | 4 reads | ~42745 tok |
+| 10:25 | Edited docs/gamechanger-integration-plan.md | expanded (+21 lines) | ~429 |
+| 10:25 | Edited docs/gamechanger-integration-plan.md | expanded (+15 lines) | ~353 |
+| 10:26 | Audited plan doc against stopped/late agent reports; backfilled 2 gaps | docs/gamechanger-integration-plan.md | Added Play Integrity emulator verdicts, evidence-gaps section, flagged iOS claim as unverified | ~6k |
+| 10:26 | Session end: 9 writes across 4 files (season.test.mjs, app.js, firebase-research.md, gamechanger-integration-plan.md) | 4 reads | ~43582 tok |
+| 10:30 | Session end: 9 writes across 4 files (season.test.mjs, app.js, firebase-research.md, gamechanger-integration-plan.md) | 4 reads | ~43582 tok |
+| 11:10 | Session end: 9 writes across 4 files (season.test.mjs, app.js, firebase-research.md, gamechanger-integration-plan.md) | 4 reads | ~43582 tok |
+| 11:21 | Created docs/azure-research.md | — | ~1709 |
+| 11:21 | Session end: 10 writes across 5 files (season.test.mjs, app.js, firebase-research.md, gamechanger-integration-plan.md, azure-research.md) | 4 reads | ~45413 tok |
+
+## Session: 2026-08-05 16:01
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 16:05 | Edited src/worker.js | added 1 condition(s) | ~294 |
+| 16:05 | Edited src/worker.js | 3→3 lines | ~53 |
+| 16:07 | Edited public/app.js | added error handling | ~4808 |
+| 16:07 | Edited public/app.js | added 17 condition(s) | ~710 |
+| 16:07 | Edited public/app.js | 5→8 lines | ~171 |
+| 16:07 | Edited public/index.html | 3→8 lines | ~132 |
+| 16:08 | Edited public/app.css | expanded (+113 lines) | ~2026 |
+| 16:08 | Edited public/sw.js | "sideline-shell-v12" → "sideline-shell-v13" | ~10 |
+| 16:12 | Created ../AppData/Local/Temp/claude/c--Users-msholly-coach-app/1c8e35bb-1450-4657-98a0-32d80e92ac8e/scratchpad/card.mjs | — | ~1746 |
+| 16:12 | Edited ../AppData/Local/Temp/claude/c--Users-msholly-coach-app/1c8e35bb-1450-4657-98a0-32d80e92ac8e/scratchpad/card.mjs | 4→5 lines | ~104 |
+| 16:13 | Created ../AppData/Local/Temp/claude/c--Users-msholly-coach-app/1c8e35bb-1450-4657-98a0-32d80e92ac8e/scratchpad/probe.mjs | — | ~625 |
+| 16:13 | Edited ../AppData/Local/Temp/claude/c--Users-msholly-coach-app/1c8e35bb-1450-4657-98a0-32d80e92ac8e/scratchpad/probe.mjs | "file:///C:/Program Files/" → "file:///C:/Program Files/" | ~38 |
+| 16:14 | Edited ../AppData/Local/Temp/claude/c--Users-msholly-coach-app/1c8e35bb-1450-4657-98a0-32d80e92ac8e/scratchpad/card.mjs | 5→10 lines | ~158 |
+| 16:15 | Edited public/app.css | CSS: dialog | ~136 |
+| 16:15 | Edited ../AppData/Local/Temp/claude/c--Users-msholly-coach-app/1c8e35bb-1450-4657-98a0-32d80e92ac8e/scratchpad/card.mjs | 1→6 lines | ~90 |
+| 16:16 | Edited public/app.js | 2→2 lines | ~42 |
+| 16:16 | Edited public/app.js | 2→5 lines | ~119 |
+| 16:17 | Edited ../AppData/Local/Temp/claude/c--Users-msholly-coach-app/1c8e35bb-1450-4657-98a0-32d80e92ac8e/scratchpad/card.mjs | added 1 condition(s) | ~412 |
+| 16:17 | Edited ../AppData/Local/Temp/claude/c--Users-msholly-coach-app/1c8e35bb-1450-4657-98a0-32d80e92ac8e/scratchpad/card.mjs | modified for() | ~170 |
+| 16:18 | Edited ../AppData/Local/Temp/claude/c--Users-msholly-coach-app/1c8e35bb-1450-4657-98a0-32d80e92ac8e/scratchpad/card.mjs | 2→5 lines | ~98 |
+| 16:19 | Edited public/app.js | 1→3 lines | ~57 |
+| 16:19 | Edited public/app.js | added 1 condition(s) | ~227 |
+| 16:19 | Edited public/app.js | added 1 condition(s) | ~30 |
+| 16:19 | Edited public/app.js | 1→3 lines | ~54 |
+| 16:19 | Edited public/app.css | 1→2 lines | ~44 |
+| 16:19 | Edited public/app.js | added 1 condition(s) | ~58 |
+
+| 23:30 | Player card (Claude Design 1a/1b/1c) — one #cardDialog sheet, four blocks, hold-a-chip + roster ⓘ entry | public/app.js, public/app.css, public/index.html, public/sw.js, src/worker.js | 103/103 tests pass; verified headless in light+dark, incl. byGame archive round-trip | ~9000 |
+| 16:23 | Session end: 26 writes across 7 files (worker.js, app.js, index.html, app.css, sw.js) | 11 reads | ~72272 tok |
+| 17:03 | Edited README.md | expanded (+18 lines) | ~305 |
+| 00:05 | Remote migration: --file hits D1 /import which rejects OAuth tokens (10000); reran pass_hash ALTER via --command | remote D1 teams | pass_hash added, 0 rows lost | ~900 |
+| 00:10 | Found remote DB had ONLY the teams table — db:init (--file) has silently never worked; created games/game_events/appearances/push_subs + 4 indexes via --command | remote D1, README.md | remote schema now matches schema.sql, 0 rows anywhere | ~1400 |
+| 17:04 | Session end: 27 writes across 8 files (worker.js, app.js, index.html, app.css, sw.js) | 11 reads | ~72598 tok |
+
+## Session: 2026-08-06 21:18
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 21:26 | Edited public/lineup-core.js | added 17 condition(s) | ~1428 |
+| 21:26 | Edited public/lineup-core.js | 1→2 lines | ~36 |
+| 21:26 | Edited public/lineup-core.js | added 2 condition(s) | ~97 |
+| 21:26 | Edited public/lineup-core.js | added 1 condition(s) | ~76 |
+| 21:26 | Edited public/lineup-core.js | expanded (+7 lines) | ~66 |
+| 21:27 | Edited public/state.js | modified if() | ~128 |
+| 21:27 | Edited public/app.js | added 1 condition(s) | ~95 |
+| 21:27 | Edited public/app.js | added 1 condition(s) | ~68 |
+| 21:27 | Edited public/app.js | added 1 condition(s) | ~67 |
+| 21:27 | Edited public/app.js | 2→3 lines | ~47 |
+| 21:27 | Edited public/app.js | 3→4 lines | ~63 |
+| 21:27 | Edited public/app.js | inline fix | ~41 |
+| 21:28 | Edited public/app.js | added 5 condition(s) | ~864 |
+| 21:29 | Edited public/app.js | added 1 condition(s) | ~91 |
+| 21:29 | Edited public/app.js | modified if() | ~30 |
+| 21:29 | Edited public/app.js | modified selCls() | ~530 |
+| 21:29 | Edited public/app.js | modified if() | ~103 |
+| 21:29 | Edited public/app.js | — | ~0 |
+| 21:29 | Edited public/app.js | 3→4 lines | ~64 |
+| 21:29 | Edited public/app.js | inline fix | ~20 |
+| 21:29 | Edited public/index.html | inline fix | ~41 |
+| 21:30 | Edited public/app.css | expanded (+26 lines) | ~1346 |
+| 21:31 | Edited public/app.css | removed 29 lines | ~42 |
+| 21:31 | Edited public/app.css | reduced (-18 lines) | ~272 |
+| 21:31 | Edited public/sw.js | "sideline-shell-v13" → "sideline-shell-v14" | ~10 |
+| 21:33 | Created test/iv.test.mjs | — | ~1971 |
+| 21:33 | Edited test/iv.test.mjs | inline fix | ~25 |
+| 21:33 | Edited test/iv.test.mjs | 4→7 lines | ~141 |
+| 21:34 | Edited test/iv.test.mjs | added 1 condition(s) | ~143 |
+| 21:36 | Created ../AppData/Local/Temp/claude/c--Users-msholly-coach-app/30be4ee3-5b31-41a7-b35b-642275ab0a97/scratchpad/drive8b.mjs | — | ~808 |
+| 04:45 | Implemented design 8b "On the field": lu.iv interval ledger in lineup-core (ivOpen/ivClose/ivSub in applySub/ensureIv/ivPlayed/ivJustOn/minVerdict), period lifecycle hooks in app.js, 8b chips (D/F strip + verdict + 4-seg track) in renderOnField, 1 Hz live update via updateFieldLive in updateClock, CSS rewrite, sw v14 | public/lineup-core.js, app.js, app.css, index.html, state.js, sw.js | 109/109 tests pass; headless screenshots verify | ~60k |
+| 04:46 | New test/iv.test.mjs: interval invariants (iv sums == app credit, columns == N x elapsed), harness sim fixture (injury/leave-and-return/just-on), late-arrival short pill, ensureIv synthesis | test/iv.test.mjs | 6 new tests green | ~4k |
+| 21:40 | Session end: 30 writes across 8 files (lineup-core.js, state.js, app.js, index.html, app.css) | 9 reads | ~79634 tok |
+| 10:47 | Edited public/app.js | modified chip1() | ~179 |
+| 10:47 | Edited public/app.js | modified renderOnField() | ~37 |
+| 10:47 | Edited public/app.js | modified shell() | ~116 |
+| 10:47 | Edited public/sw.js | "sideline-shell-v14" → "sideline-shell-v15" | ~10 |
+| 10:48 | Created ../AppData/Local/Temp/claude/c--Users-msholly-coach-app/30be4ee3-5b31-41a7-b35b-642275ab0a97/scratchpad/drive8b-p2.mjs | — | ~922 |
+| 10:49 | Edited ../AppData/Local/Temp/claude/c--Users-msholly-coach-app/30be4ee3-5b31-41a7-b35b-642275ab0a97/scratchpad/drive8b-p2.mjs | added error handling | ~332 |
+| 10:50 | Edited ../AppData/Local/Temp/claude/c--Users-msholly-coach-app/30be4ee3-5b31-41a7-b35b-642275ab0a97/scratchpad/drive8b-p2.mjs | 3→6 lines | ~82 |
+| 10:51 | Edited ../AppData/Local/Temp/claude/c--Users-msholly-coach-app/30be4ee3-5b31-41a7-b35b-642275ab0a97/scratchpad/drive8b-p2.mjs | added error handling | ~219 |
+| 10:51 | Edited ../AppData/Local/Temp/claude/c--Users-msholly-coach-app/30be4ee3-5b31-41a7-b35b-642275ab0a97/scratchpad/drive8b-p2.mjs | 4→5 lines | ~123 |
+| 10:53 | Edited ../AppData/Local/Temp/claude/c--Users-msholly-coach-app/30be4ee3-5b31-41a7-b35b-642275ab0a97/scratchpad/drive8b-p2.mjs | 2→3 lines | ~105 |
+| 10:54 | Edited ../AppData/Local/Temp/claude/c--Users-msholly-coach-app/30be4ee3-5b31-41a7-b35b-642275ab0a97/scratchpad/drive8b-p2.mjs | 2→5 lines | ~78 |
+| 10:54 | Edited ../AppData/Local/Temp/claude/c--Users-msholly-coach-app/30be4ee3-5b31-41a7-b35b-642275ab0a97/scratchpad/drive8b-p2.mjs | 3→2 lines | ~83 |
+| 10:55 | Edited ../AppData/Local/Temp/claude/c--Users-msholly-coach-app/30be4ee3-5b31-41a7-b35b-642275ab0a97/scratchpad/drive8b-p2.mjs | added error handling | ~165 |
+| 10:56 | Edited ../AppData/Local/Temp/claude/c--Users-msholly-coach-app/30be4ee3-5b31-41a7-b35b-642275ab0a97/scratchpad/drive8b-p2.mjs | 3→4 lines | ~65 |
+| 10:57 | Edited ../AppData/Local/Temp/claude/c--Users-msholly-coach-app/30be4ee3-5b31-41a7-b35b-642275ab0a97/scratchpad/drive8b-p2.mjs | 2→3 lines | ~66 |
+| 10:58 | Edited ../AppData/Local/Temp/claude/c--Users-msholly-coach-app/30be4ee3-5b31-41a7-b35b-642275ab0a97/scratchpad/drive8b-p2.mjs | 2→5 lines | ~94 |
+| 18:20 | User report: live panel unstyled/all-"on from now" = mixed stale shell (new app.js + old app.css/state.js), not missing features. Hid per-row goal/SOG behind ROW_STATS flag (kept feature), added ensureIv guard in renderOnField, SW v15, killed zombie wrangler tree, fresh dev server on 8788 | public/app.js, sw.js | 109/109 tests; headless P2 screenshot matches plan; iv-strip reload proves guard | ~45k |
+| 11:00 | Session end: 46 writes across 9 files (lineup-core.js, state.js, app.js, index.html, app.css) | 10 reads | ~82600 tok |
+
+## Session: 2026-08-06 12:24
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 12:48 | Edited public/lineup-core.js | added 2 condition(s) | ~410 |
+| 12:48 | Edited public/lineup-core.js | added 1 condition(s) | ~389 |
+| 12:48 | Edited public/app.js | modified totPlayed() | ~208 |
+| 12:48 | Edited public/app.js | added 1 condition(s) | ~65 |
+| 12:48 | Edited public/app.js | inline fix | ~4 |
+| 12:50 | Created test/credit.test.mjs | — | ~3051 |
+| 12:50 | Edited test/credit.test.mjs | 2→4 lines | ~60 |
+| 12:55 | Fixed future-period credit leak: positionTotals capped at played, totKept from playedThrough(pos:GK) | public/lineup-core.js, public/app.js, test/credit.test.mjs | 115/115 pass (was 109); negative control fails 5/6 against old logic | ~9000 |
+| 12:52 | Session end: 7 writes across 3 files (lineup-core.js, app.js, credit.test.mjs) | 3 reads | ~54715 tok |
+
+## Session: 2026-08-06 12:54
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 12:56 | Edited public/app.js | modified atFullTime() | ~136 |
+| 12:57 | Edited public/app.js | added 1 condition(s) | ~118 |
+| 12:57 | Edited public/index.html | inline fix | ~36 |
+| 12:57 | Edited public/app.js | added 1 condition(s) | ~66 |
+| 12:57 | Edited public/app.js | added 1 condition(s) | ~51 |
+| 12:57 | Edited public/app.js | modified if() | ~46 |
+| 12:57 | Edited public/app.js | added 1 condition(s) | ~50 |
+| 12:57 | Edited public/app.js | 2→2 lines | ~24 |
+| 12:57 | Edited public/app.js | inline fix | ~27 |
+| 12:57 | Edited public/app.js | 1→2 lines | ~45 |
+| 12:57 | Edited public/app.js | added 1 condition(s) | ~56 |
+| 12:58 | Edited public/app.css | CSS: opacity, cursor, pointer-events | ~56 |
+| 20:00 | Hardened full-time state: gameOver() guards clock/period actions, disabled Final button | public/app.js, public/index.html, public/app.css | 115/115 tests pass, browser tap-through not run | ~9k |
+| 12:59 | Session end: 12 writes across 3 files (app.js, index.html, app.css) | 1 reads | ~44226 tok |
+
+## Session: 2026-08-07 09:37
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 09:38 | Edited public/app.css | CSS: padding-top, padding-top, ponytail | ~59 |
+| 09:41 | Added top padding to .panel, zeroed for #p-game (Game Day keeps its own sticky clock band) | public/app.css | done | ~40 |
+| 09:39 | Session end: 1 writes across 1 files (app.css) | 2 reads | ~24021 tok |
+| 10:12 | Session end: 1 writes across 1 files (app.css) | 2 reads | ~24021 tok |

@@ -1,0 +1,15 @@
+# Security headers for the static app. Workers static assets support _headers
+# natively; /api/* responses are minted in src/worker.js and set their own.
+#
+# The CSP is as tight as this app can be: every script is a file under /, there
+# are no inline <script> blocks and no external origins at all. 'unsafe-inline'
+# is on style-src ONLY, because index.html uses style="" attributes for layout
+# (removing them would be a large, unrelated diff for no security gain — no
+# untrusted HTML is ever inserted into the page).
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: no-referrer
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+  Cross-Origin-Opener-Policy: same-origin

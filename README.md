@@ -51,7 +51,27 @@ fresh databases) *and* a numbered file in `migrations/` (for existing ones):
 ```bash
 npx wrangler d1 execute coach-sideline-db --local  --file=./migrations/0001_games_venue.sql
 npx wrangler d1 execute coach-sideline-db --remote --file=./migrations/0001_games_venue.sql
+npx wrangler d1 execute coach-sideline-db --local  --file=./migrations/0002_teams_pass.sql
+npx wrangler d1 execute coach-sideline-db --remote --file=./migrations/0002_teams_pass.sql
 ```
+
+> **`--remote --file` fails with an OAuth login.** It uploads through D1's `/import` endpoint,
+> which answers `Authentication error [code: 10000]` for a `wrangler login` token — even a
+> super-admin one with `d1 (write)`. `--command` goes through `/query` and works with the same
+> token, so run remote migrations statement by statement:
+>
+> ```bash
+> npx wrangler d1 execute coach-sideline-db --remote --command="ALTER TABLE teams ADD COLUMN pass_hash TEXT"
+> ```
+>
+> This also means **`npm run db:init` cannot set up a remote database** — it is `--file`. After a
+> fresh `wrangler d1 create`, either create the tables with `--command` one at a time, or export
+> `CLOUDFLARE_API_TOKEN` (a real API token with D1 Edit) so the import endpoint accepts you.
+> Check what actually exists before assuming a deploy is healthy:
+>
+> ```bash
+> npx wrangler d1 execute coach-sideline-db --remote --command="SELECT name FROM sqlite_master WHERE type='table'"
+> ```
 
 ## GameChanger schedule (optional, read-only)
 
@@ -87,12 +107,44 @@ they were based on; if the server has moved on, the server returns **409** and t
 you to choose: *use the other device's version* or *overwrite with this one*. No silent data
 loss. Pulls that find a newer server revision adopt it and re-render.
 
+## Login (optional team passphrase)
+
+The team token in the URL is a **secret capability link** — whoever holds it holds the team.
+That's right for a link you text to two assistant coaches, and wrong the moment it leaks, so
+a team can add a passphrase on top of it.
+
+- **Opt-in, per team.** No passphrase = the link is the only gate, exactly as before. Nobody's
+  existing link stops working.
+- Set it from **Roster & Lineup → 🔓 Add a passphrase**, next to *Copy team link*. Everyone who
+  opens the link types it once per device; the session lasts 30 days.
+- **One shared passphrase per team. No accounts, no email, no reset** — there's no address to
+  send one to. Changing it signs out every device (see below), which is the revocation path.
+- **Forgot it?** Your own phone still holds the whole team in `localStorage`; only sync stops.
+  Unlock it by hand:
+  ```bash
+  npx wrangler d1 execute coach-sideline-db --remote \
+    --command="UPDATE teams SET pass_hash = NULL WHERE id = '<token>'"
+  ```
+
+How it's stored and checked:
+
+| | |
+|---|---|
+| **Hash** | PBKDF2-SHA256, 16-byte random salt, `pbkdf2$iters$salt$hash`. 10,000 iterations — Workers **Free allows 10 ms CPU per request** and PBKDF2 costs ~0.5 ms per 1,000. The count lives in the hash, so raising it on a paid plan re-hashes nobody. |
+| **Session** | Signed cookie, `HttpOnly; Secure; SameSite=Strict; Path=/api`, 30 days. The signing key **is the team's `pass_hash`** — so there's no session secret to manage, and changing the passphrase invalidates every outstanding session everywhere, for free. |
+| **Brute force** | The `LOGIN_LIMIT` rate-limit binding: 10 attempts/minute, keyed on the **team id** (an IP key just invites a guesser to rotate IPs). Checked before any D1 read or key derivation. |
+| **Gate** | Every `/api/team/:id*` route except `/auth` itself. Comparisons are constant-time. |
+
+## Security headers
+
+`public/_headers` (native to Workers static assets) sets CSP, `nosniff`, `X-Frame-Options: DENY`,
+`Referrer-Policy: no-referrer`, `Permissions-Policy` and COOP on the app shell; `/api/*` responses
+add `nosniff` in `src/worker.js`. The CSP allows **no external origins and no inline scripts**;
+`'unsafe-inline'` is on `style-src` only, for the `style=""` attributes in `index.html`.
+
 ## Data & privacy
 
-- The team token in the URL is a **secret capability link** (like a "anyone with the link"
-  doc). Treat it as the password. It's the only gate in v1.
-- It's kids' data — keep entries to **first name + last initial**. A passphrase gate is an
-  easy future add (`teams.pass_hash` column + check in the Worker).
+- It's kids' data — keep entries to **first name + last initial**.
 - **Backups are automatic:** D1 **Time Travel** keeps 30 days of point-in-time history —
   restore with `npx wrangler d1 time-travel restore coach-sideline-db --timestamp=<ISO>`.
 
@@ -113,6 +165,13 @@ loss. Pulls that find a newer server revision adopt it and re-render.
 - `PUT /api/team/:id` body `{ doc, baseRev }` → `{ id, rev, updatedAt }`; **409** on stale
   `baseRev` (returns current doc) unless `?force=1`. `id` = `[A-Za-z0-9_-]{8,64}`; `doc` must
   be a JSON string ≤ 512 KB.
+- `GET /api/team/:id/auth` → `{ exists, locked, authed }` — what the client needs to decide
+  whether to prompt.
+- `POST /api/team/:id/auth` — `{ pass }` log in · `{ newPass }` set/change · `{ pass, newPass }`
+  change without a live session · `{ newPass: null }` remove. **200** sets the session cookie,
+  **401** `bad_passphrase`, **429** rate limited, **404** team doesn't exist yet.
+  Setting the *first* passphrase only needs the link; changing it needs a session or the current
+  passphrase. Every other `/api/team/:id*` route answers **401** `{error:"locked"}` without one.
 - `GET /api/team/:id/schedule` → `{ calendar, events:[{ uid, startsAt, endsAt, summary,
   location, description, venue, opponent }] }`. **501** when `GC_ICS_URL` isn't set, **502**
   if the feed is unreachable or isn't a calendar. Never returns the feed URL or its token.

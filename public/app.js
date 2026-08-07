@@ -21,47 +21,10 @@
   };
   function fmt(){ return FORMATS[state.format]||FORMATS.u8; }
 
-  function load(){
-    try{ var s=JSON.parse(localStorage.getItem(KEY)); if(s&&s.roster){ fixup(s); migrate(s); return s; } }catch(e){}
-    return {
-      team:"",
-      roster:["Bearett","Neel","Jeffrey","Oliver","Reyansh","Zendrix","Connor","George"]
-        .map(function(n,i){return {id:"seed"+i,name:n,present:true};}),
-      periods:4, onfield:6, minsper:10,
-      format:"u8",
-      season:"Fall 2026",       // the ledger-reset boundary, stamped on every archive row
-      posTotals:{},             // season D/F/GK periods from the archive — cached for offline
-      practice:[], practiceRun:{startedAt:0,idx:0,marks:[]}, lineup:null,
-      played:{},   // career periods played, by player id — drives "rotate this responsibility"
-      kept:{},     // career periods in goal, by player id
-      game:{us:0,them:0,period:1,secs:600,running:false,onBreak:false,playerStats:{}}
-    };
-  }
-  // Docs written by older versions of the app (or another device mid-upgrade).
-  function fixup(s){
-    if(!s.played) s.played={};
-    if(!s.kept) s.kept={};
-    if(!s.format) s.format="u8";
-    if(s.venue!=="away") s.venue="home";   // manual for now — nothing auto-fills it
-    if(!s.season) s.season="Fall 2026";
-    if(!s.posTotals) s.posTotals={};
-    if(!s.practiceRun) s.practiceRun={startedAt:0,idx:0,marks:[]};
-    if(s.game&&!s.game.goals) s.game.goals=[];
-    if(s.lineup){
-      if(s.lineup.keeper==null) s.lineup.keeper=true;   // every pre-format lineup was U8
-      LineupCore.ensureApp(s.lineup);
-    }
-  }
-  // Older saves banked the plan straight into the career totals. Move the live game back
-  // out into its own ledger so it can be corrected before it's committed.
-  function migrate(s){
-    if(!s.lineup || s.lineup.actual) return;
-    s.lineup.actual={}; s.lineup.gkActual={};
-    (s.lineup.periods||[]).forEach(function(f){ f.forEach(function(id){
-      s.lineup.actual[id]=(s.lineup.actual[id]||0)+1; s.played[id]=(s.played[id]||0)-1; }); });
-    (s.lineup.gk||[]).forEach(function(id){ if(id){
-      s.lineup.gkActual[id]=(s.lineup.gkActual[id]||0)+1; s.kept[id]=(s.kept[id]||0)-1; } });
-  }
+  // Defaults, the migration of older docs and the read live in state.js, behind
+  // node --test — a migration bug is silent and permanent, so it gets tests.
+  function load(){ return SaveState.load(KEY); }
+  var fixup=SaveState.fixup;
   function loadMeta(){ try{ return JSON.parse(localStorage.getItem(KEY+":meta"))||{rev:0,updatedAt:0,syncedAt:0}; }catch(e){ return {rev:0,updatedAt:0,syncedAt:0}; } }
   function saveMeta(){ try{ localStorage.setItem(KEY+":meta",JSON.stringify(meta)); }catch(e){} }
   function saveLocal(){ try{ localStorage.setItem(KEY,JSON.stringify(state)); }catch(e){} }
@@ -119,7 +82,10 @@
       askDone=resolve; askIsText=isText;
       dlg.innerHTML='<h4>'+esc(o.title||"Are you sure?")+'</h4>'
         +(o.body?'<p>'+esc(o.body).replace(/\n/g,"<br>")+'</p>':"")
-        +(isText?'<input type="text" id="askInput" value="'+esc(o.input)+'" placeholder="'+esc(o.placeholder||"")+'" autocomplete="off">':"")
+        // o.pass masks the field and turns off the phone keyboard's "helpful"
+        // capitalisation — an autocapitalised passphrase silently fails to match.
+        +(isText?'<input type="'+(o.pass?"password":"text")+'" id="askInput" value="'+esc(o.input)+'" placeholder="'+esc(o.placeholder||"")+'" autocomplete="off"'
+          +(o.pass?' autocapitalize="none" autocorrect="off" spellcheck="false"':"")+'>':"")
         +'<div class="btns"><button class="btn ghost" data-act="ask-no">'+esc(o.cancel||"Cancel")+'</button>'
         +'<button class="btn'+(o.danger?" cone":"")+'" style="flex:2" data-act="ask-yes">'+esc(o.ok||"Yes")+'</button></div>';
       dlg.showModal();
@@ -236,10 +202,13 @@
       return '<li class="'+(st==="in"?"":st)+'" data-id="'+p.id+'">'
         +'<button class="rowtog" data-act="toggle-present" data-id="'+p.id+'"'
         +' aria-label="'+esc(p.name)+' is '+label+' — tap to change">'
-        +'<span class="pnum">'+(i+1)+'</span>'
+        +'<span class="pnum">'+esc(p.num||(i+1))+'</span>'
         +'<span class="pname">'+esc(p.name)+'</span>'
         +'<span class="state">'+label+'</span>'
         +'</button>'
+        // The full-screen framing of the player card (1b) — the roster row is
+        // already the IN/LATE/OUT toggle, so the card needs its own target.
+        +'<button class="rowinfo no-print" data-act="card" data-id="'+p.id+'" title="Player card" aria-label="'+esc(p.name)+' — player card">ⓘ</button>'
         +'<button class="icon no-print" data-act="del-player" data-id="'+p.id+'" title="Remove">×</button>'
         +'</li>';
     }).join("");
@@ -277,7 +246,16 @@
   // totals. Everything else (reshuffle, roster edit, settings) redraws the SAME game, and
   // only ever rewrites periods that haven't been played yet.
   function totPlayed(lu,id){ return (state.played[id]||0) + ((lu&&lu.actual[id])||0); }
-  function totKept(lu,id){ return (state.kept[id]||0) + ((lu&&lu.gkActual[id])||0); }
+  // Periods ACTUALLY kept. Not lu.gkActual — tally() stamps every planned keeper
+  // period at build time, so that silenced "Never in goal" for a child merely
+  // penciled in for P4, which is the one pill that exists to say "give them a turn".
+  function totKept(lu,id){ return (state.kept[id]||0) + (lu?LineupCore.playedThrough(lu,curPi(),id,curPi(),remFrac(),"GK"):0); }
+  // The season position ratio every display reads: capped at periods played, so
+  // the plan never colours the D/F strip a coach picks a position off.
+  function posTotals(lu){
+    if(!lu) return LineupCore.positionTotals(null,state.posTotals);   // archive only — curPi() needs a lineup
+    return LineupCore.positionTotals(lu,state.posTotals,curPi()+1,curPi(),remFrac());
+  }
 
   var tally=LineupCore.tally;   // extracted behind node --test (plan item 4)
   function commitGame(lu){
@@ -306,6 +284,7 @@
         tally(state.lineup,keep,-1);
         state.lineup.periods.length=keep; state.lineup.gk.length=keep;
         (state.lineup.app=state.lineup.app||[]).length=keep;
+        LineupCore.ivTruncate(state.lineup,keep);
         while(state.lineup.periods.length<state.lineup.Q){ state.lineup.periods.push([]); state.lineup.gk.push(null); state.lineup.app.push([]); }
       } else if(state.lineup){ state.lineup=null; }
       save(); renderLineup(); renderGame();
@@ -319,7 +298,7 @@
     }
     var lu = keep ? state.lineup : {periods:[],gk:[],actual:{},gkActual:{},app:[]};
     var wasHandEdited = keep===0 && !!(state.lineup&&state.lineup.handEdited);
-    if(keep){ tally(lu,keep,-1); lu.periods.length=keep; lu.gk.length=keep; (lu.app=lu.app||[]).length=keep; }
+    if(keep){ tally(lu,keep,-1); lu.periods.length=keep; lu.gk.length=keep; (lu.app=lu.app||[]).length=keep; LineupCore.ivTruncate(lu,keep); }
 
     var order=present.slice();
     if(reshuffle){ for(var i=order.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)); var t=order[i];order[i]=order[j];order[j]=t; } }
@@ -462,7 +441,7 @@
     if(hiS-loS>1e-9) players.forEach(function(p,i){ if(seasons[i]<=loS+1e-9) owedSet[p.id]=1; });
     // Season position ratio (decision 6: one decimal, the honest number) —
     // archive cache plus this game's ledger.
-    var posTot=LineupCore.positionTotals(lu,state.posTotals);
+    var posTot=posTotals(lu);
     var head="<tr><th>Player</th>";
     for(var q=0;q<Q;q++){ head+="<th>P"+(q+1)+"</th>"; }
     head+="<th>Plays</th><th>Season</th><th>D · F</th></tr>";
@@ -691,14 +670,18 @@
     $("#usScore").textContent=g.us; $("#themScore").textContent=g.them;
     var pill=$("#periodPill");
     pill.classList.toggle("break",!!g.onBreak);
-    pill.textContent = g.onBreak ? (g.breakKind==="half"?"Halftime":"Sub break") : "Period "+g.period+" of "+maxPeriods();
+    pill.textContent = gameOver() ? "Full time"
+      : (g.onBreak ? (g.breakKind==="half"?"Halftime":"Sub break") : "Period "+g.period+" of "+maxPeriods());
     updateClock();
     // At full time Start is the wrong verb — there is nothing left to start.
     // The button becomes the one correct action; a period that ended by mistake
     // is Fix a mistake's job, not this button's.
-    var ft=atFullTime();
-    $("#timerBtn").innerHTML=ft?"🏁 Finish the game":(g.running?"⏸ Pause":"▶ Start");
-    $("#timerBtn").className="btn "+(ft?"btn-finish":(g.running?"btn-pause":"btn-start"));
+    var ft=atFullTime(), over=gameOver();
+    var tb=$("#timerBtn");
+    tb.innerHTML=over?("🏁 Final "+g.us+"–"+g.them):(ft?"🏁 Finish the game":(g.running?"⏸ Pause":"▶ Start"));
+    tb.className="btn "+(ft||over?"btn-finish":(g.running?"btn-pause":"btn-start"));
+    tb.disabled=over;
+    var pd=$("#periodPlus"); if(pd) pd.disabled=over;
     var bb=$("#bandBtn"); if(bb) bb.innerHTML=ft?"🏁 Finish":"▶ Start";
     renderOnField();
     renderNudge();
@@ -721,7 +704,7 @@
     el.textContent=txt;
     // Requirement 6: a stopped clock mid-game must be loud — fired on manual
     // pause AND period expiry (the case the requirement actually names).
-    var stopped=!!(g.started&&!g.running);
+    var stopped=!!(g.started&&!g.running&&!gameOver());   // a finished game is not an alarm
     el.className="clock-big tnum"+(!stopped&&g.running?" run":"")+(!stopped&&s<=30&&s>0?" warn":"")+(stopped?" stopped":"");
     // 1b's alarm, kept in 1d: the stopped clock becomes a band with Start inside it.
     var band=$("#clockBand");
@@ -737,6 +720,7 @@
     // updateClock — otherwise Reset would stay hidden for a whole running period.
     // Both clock tags are absolute, so toggling this shifts nothing.
     var rt=$("#resetTag"); if(rt) rt.hidden=!canReset();
+    updateFieldLive();   // 8b: live segment, verdicts and just-on move with the clock
     renderEnds();
     paintLock(txt);   // no-op unless the pocket lock is up
   }
@@ -748,10 +732,16 @@
     var g=state.game;
     return !!(g.started && !g.endedAt && !g.onBreak && g.secs<=0 && g.period>=maxPeriods());
   }
+  // Full time is stamped: the game is read-only until a new lineup replaces it.
+  // Every clock and period action goes through this — otherwise Start would
+  // re-run the last period on a fresh 10:00 and Period + would re-end a game
+  // whose archive row is already closed.
+  function gameOver(){ return !!state.game.endedAt; }
   // Requirement 5 (as walked back, decision 1): a secondary wall-clock readout.
   // ponytail: labelled an estimate on purpose — between-period breaks aren't modelled.
   function renderEnds(){
     var g=state.game, el=$("#endsAt"); if(!el) return;
+    if(gameOver()){ el.textContent="full time"; return; }
     var left=Math.max(0,g.secs)+Math.max(0,maxPeriods()-g.period)*state.minsper*60;
     var d=new Date(nowMs()+left*1000);
     var h=d.getHours(), m=d.getMinutes(), ap=h>=12?"pm":"am"; h=h%12||12;
@@ -759,6 +749,7 @@
   }
   function tick(){
     var g=state.game;
+    if(gameOver()){ g.running=false; stopTicker(); return; }   // a ticker left over from a restored doc
     if(!g.running) return;
     var elapsed=Math.floor((nowMs()-anchor)/1000);   // wall-clock anchored: a backgrounded phone doesn't run the period long
     if(elapsed<1) return;
@@ -774,6 +765,7 @@
   function periodExpired(){
     var g=state.game, ended=g.period;
     beep();
+    if(state.lineup) LineupCore.ivClose(state.lineup,curPi());   // open interval runs end with the period
     logEvent("clock",{running:false,expired:true});
     if(ended>=maxPeriods()){
       g.running=false; g.onBreak=false; g.stoppedAt=nowMs(); stopTicker();
@@ -795,6 +787,7 @@
     var prevGk=gkFn(g.period);
     g.onBreak=false; g.running=false; g.stoppedAt=nowMs(); stopTicker();
     g.period++; g.secs=state.minsper*60;
+    if(lu) LineupCore.ivOpen(lu,curPi());   // the new period's runs open at 0 — nothing elapses until Start
     beep();
     save(); renderGame();
     // The sheet rotates the keeper on its own at every period boundary — that
@@ -983,65 +976,81 @@
     (lu.app||[]).slice(0,pi+1).forEach(function(es){ es.forEach(function(e){ if(e.id===id&&e.pos==="GK"&&e.frac>1e-9) n+=e.frac; }); });
     return n;
   }
-  function isPartial(v){ return Math.abs(v-Math.round(v))>0.04; }
-  // The half pip means "a sub split one of their periods" — a property of the
-  // PLAN, not of the clock. Now that the displayed number is elapsed time, every
-  // chip is fractional mid-period, so testing the displayed value would pip
-  // almost all of them and the signal would carry nothing.
-  function wasSplit(lu,pi,id){
-    var split=false;
-    (lu.app||[]).slice(0,pi+1).forEach(function(es){
-      var n=0; es.forEach(function(e){ if(e.id===id&&e.frac>1e-9) n+=e.frac; });
-      if(n>1e-9 && isPartial(n)) split=true;
+  /* ---------- 8b chip anatomy: season D/F strip + verdict + interval track ---------- */
+  // Season D/F strip: F block over D block, heights = season shares from
+  // positionTotals. Solid blocks replaced 2c's needle — same data, less ink.
+  function stripHtml(t){
+    var d=(t&&t.D)||0, f=(t&&t.F)||0, tot=d+f;
+    var fp=tot?Math.round(f/tot*100):0, dp=tot?Math.round(d/tot*100):0;
+    return '<span class="dfstrip"><i class="f" style="height:'+fp+'%"></i><i class="d" style="height:'+dp+'%"></i></span>';
+  }
+  // How far through the period on the clock, 0..1 — remFrac's complement, so
+  // the break and pre-kickoff cases are already right.
+  function periodT(){ return 1-remFrac(); }
+  // Verdict + "just on" badge for the name row. One source of markup: the full
+  // render and the 1 Hz live update both come through here.
+  function liveHtml(lu,id,api,pt){
+    var v=LineupCore.minVerdict(LineupCore.ivPlayed(lu,id,api,pt),lu.Q,api+pt);
+    return (LineupCore.ivJustOn(lu,id,api,pt,lu.minsper)?'<span class="badge-juston">just on</span>':'')
+      +'<span class="verdict '+v.k+'">'+v.label+'</span>';
+  }
+  // The four-segment track: the dark fill sits WHERE the minutes happened, so a
+  // leave-and-return shows a real break. Texture carries the meaning, not hue —
+  // dark = played, flat grey = elapsed while they sat, stripes = not yet.
+  function trackHtml(lu,id,api,pt){
+    var Q=lu.Q, MIN=Q>1?Q-1:Q, iv=lu.iv||[], out="";
+    function spans(q,cap){
+      return ((iv[q]||{})[id]||[]).map(function(v){
+        var a=v[0], b=v[1]==null?cap:Math.min(v[1],cap);
+        return b-a>0.0005?'<i class="iv" style="left:'+r1(a*100)+'%;width:'+r1((b-a)*100)+'%"></i>':"";
+      }).join("");
+    }
+    for(var q=0;q<Q;q++){
+      if(q<api||(q===api&&pt>=0.999)) out+='<span class="seg past">'+spans(q,1)+'</span>';
+      else if(q===api) out+='<span class="seg live"><i class="el" style="width:'+r1(pt*100)+'%"></i><i class="fut" style="left:'+r1(pt*100)+'%"></i>'+spans(q,pt)+'</span>';
+      else out+='<span class="seg fut"></span>';
+    }
+    return '<span class="track">'+out+'<i class="notch" style="left:'+(MIN/Q*100)+'%"></i></span>';
+  }
+  // 8b render cadence: the live segment, verdicts and the just-on badge move
+  // with the clock, but rebuilding #onFieldChips innerHTML every second would
+  // drop the tap-selection state — so only the pieces inside each existing
+  // chip are rewritten. Full renderOnField stays on sub/swap/period/build.
+  function updateFieldLive(){
+    var lu=state.lineup, prog=$("#fmProg");
+    if(!lu){ if(prog) prog.textContent=""; return; }
+    var api=curPi(), pt=periodT(), gone=Math.min(lu.Q,api+pt);
+    if(prog) prog.textContent=r1(gone)+"p played · "+r1(lu.Q-gone)+"p left";
+    $$(".field-mini .jchip[data-id]").forEach(function(ch){
+      var id=ch.dataset.id;
+      var lv=ch.querySelector(".jlive"); if(lv) lv.innerHTML=liveHtml(lu,id,api,pt);
+      var tr=ch.querySelector(".track"); if(tr) tr.outerHTML=trackHtml(lu,id,api,pt);
     });
-    return split;
-  }
-  // 2c's balance needle: centre = even season D/F split, left = defense-heavy.
-  function needleHtml(t){
-    var d=(t&&t.D)||0, f=(t&&t.F)||0;
-    var idx=Math.round((1-(d-f)/6)/2*10); idx=Math.max(0,Math.min(10,idx));
-    var segs="";
-    for(var i=0;i<11;i++){ segs+='<i class="'+(i===idx?"mark":"")+'"></i>'; }
-    return '<span class="ndl"><b class="d">D</b><span class="track">'+segs+'</span><b class="f">F</b></span>';
-  }
-  // "1.7p / 17m" — both numbers are THIS GAME (playedSoFar reads lu.app, the
-  // per-game ledger). The season figure on a chip is the D/F needle, nothing
-  // else. Minutes are here because a coach thinks in minutes on the sideline
-  // and periods only when checking the guide's 3-of-4 rule.
-  function ppHtml(v,split){
-    return '<span class="pp" title="Played this game">'
-      +(split?'<span class="half"></span>':'')
-      +'<b>'+r1(v)+'p</b><i>'+Math.round(v*state.minsper)+'m</i></span>';
-  }
-
-  // 1 col / 2 col is a device preference, not team state (1d port note).
-  function loadUI(){ try{ return JSON.parse(localStorage.getItem(BASE+":ui"))||{}; }catch(e){ return {}; } }
-  var uiCols=(loadUI().cols===2)?2:1;
-  function setCols(n){
-    uiCols=n;
-    try{ var u=loadUI(); u.cols=n; localStorage.setItem(BASE+":ui",JSON.stringify(u)); }catch(e){}
-    renderOnField();
   }
 
   var nkOpen=false;
+  var ROW_STATS=false;   // per-row ⚽/🥅 loggers — hidden for now, feature kept
   function renderOnField(){
     var box=$("#onFieldChips"), sub=$("#subLine"), note=$("#benchNote"), hintEl=$("#fmHint"), fmtChip=$("#fmtChip");
     if(!state.lineup){
       box.className="onfield";
       box.innerHTML='<span class="hint" style="color:rgba(255,255,255,.7)">Build a lineup on the first tab to see who\'s on.</span>';
       sub.innerHTML=""; note.innerHTML=""; if(hintEl) hintEl.hidden=true; if(fmtChip) fmtChip.hidden=true;
+      var prog0=$("#fmProg"); if(prog0) prog0.textContent="";
       return;
     }
     // api = periods actually played (what the "1.5p" numbers count).
     // pi  = the period being shown and edited — the next one during a break.
-    var lu=state.lineup, brk=onBreakNext(), api=curPi(), pi=editPi(), sofar=api+1;
+    var lu=state.lineup, brk=onBreakNext(), api=curPi(), pi=editPi();
+    // Belt-and-braces for a doc written by a pre-iv shell (or a mixed SW cache
+    // serving an old state.js): synthesize the interval ledger before reading
+    // it, or every verdict reads "on from now" off an empty lu.iv. Idempotent.
+    LineupCore.ensureIv(lu, state.game.started?Math.min(state.game.period,lu.periods.length):0);
     function nm(id){ if(!id) return "—"; var p=byId(id); return p?p.name:"?"; }
     var onNow=lu.periods[pi]||[], gkNow=(lu.gk||[])[pi];
-    var posTot=LineupCore.positionTotals(lu,state.posTotals);
+    var posTot=posTotals(lu);
 
     if(fmtChip){ fmtChip.hidden=false; $("#fmtLabel").textContent=lu.keeper?"With keeper":"No keeper"; }
-    // no #colSeg in the markup any more — harmless if the toggle is put back
-    $$("#colSeg button").forEach(function(b){ b.setAttribute("aria-pressed",String(+b.dataset.n===uiCols)); });
     var titleEl=$("#fmTitle");
     if(titleEl) titleEl.textContent = brk ? "Starting period "+(pi+1) : "On the field";
     var panel=$(".field-mini"); if(panel) panel.classList.toggle("break",brk);
@@ -1058,53 +1067,53 @@
 
     // Next sub, computed from time actually played (1d port note): longest on
     // goes off — keeper excluded, they finish the period in goal — and the
-    // least-played bench player comes on.
+    // least-played bench player comes on. Ties break by season-owed (totPlayed,
+    // the builder's own metric), NOT by name: an alphabetical tie-break made
+    // the same kids the #1 rec every game and drifted their season a dozen
+    // periods (bug-118, measured in test/season.test.mjs). Owed-aware ties
+    // make rec-followed subs repay the season instead of shaving it.
     var offSorted=onNow.filter(function(id){ return id!==gkNow; })
       .map(function(id){ return {id:id, v:playedSoFar(lu,api,id)}; })
-      .sort(function(a,b){ return b.v-a.v || nm(a.id).localeCompare(nm(b.id)); });
+      .sort(function(a,b){ return b.v-a.v || totPlayed(lu,b.id)-totPlayed(lu,a.id) || nm(a.id).localeCompare(nm(b.id)); });
     var benchSorted=state.roster.filter(function(p){ return p.present && onNow.indexOf(p.id)<0; })
       .map(function(p){ return {id:p.id, v:playedSoFar(lu,api,p.id)}; })
-      .sort(function(a,b){ return a.v-b.v || nm(a.id).localeCompare(nm(b.id)); });
+      .sort(function(a,b){ return a.v-b.v || totPlayed(lu,a.id)-totPlayed(lu,b.id) || nm(a.id).localeCompare(nm(b.id)); });
     var nPairs=Math.min(offSorted.length,benchSorted.length);
     var offList=offSorted.slice(0,nPairs), onList=benchSorted.slice(0,nPairs);
-    var offIds=offList.map(function(x){ return x.id; });
 
     function selCls(id,where){ return (sel&&sel.id===id&&sel.where===where)?" sel":""; }
     function posOf(id){ return id===gkNow?"GK":(LineupCore.posInPeriod(lu,pi,id)||"F"); }
+    var pt=periodT();
+    updateFieldLive();   // the h3 "1.4p played · 2.6p left" readout
+    function fieldChip(id,bench){
+      var where=bench?"bench":"field";
+      return '<button class="jchip'+(bench?" bench":"")+selCls(id,where)+'" data-act="chip" data-where="'+where+'" data-id="'+id+'">'
+        +stripHtml(posTot[id])
+        +'<span class="jbody">'
+        +'<span class="jname"><span class="nm">'+esc(nm(id))+'</span><span class="jlive">'+liveHtml(lu,id,api,pt)+'</span></span>'
+        +trackHtml(lu,id,api,pt)
+        +'</span></button>';
+    }
     function chip1(id){
       var st=(state.game.playerStats||{})[id]||{goals:0,sog:0};
-      return '<div class="jrow">'
-        +'<button class="jchip'+selCls(id,"field")+'" data-act="chip" data-where="field" data-id="'+id+'">'
-        +(offIds.indexOf(id)>=0?'<span class="dot-off"></span>':'')
-        +'<span class="nm">'+esc(nm(id))+'</span>'
-        +needleHtml(posTot[id])
-        +ppHtml(playedSoFar(lu,api,id),wasSplit(lu,api,id))
-        +'</button>'
-        +'<span class="jstat">'
-        +'<button class="statbtn" data-act="goal" data-id="'+id+'" title="Goal">⚽<b>'+st.goals+'</b></button>'
-        +'<button class="statbtn" data-act="sog" data-id="'+id+'" title="Shot on goal">🥅<b>'+st.sog+'</b></button>'
-        +'</span></div>';
+      return '<div class="jrow">'+fieldChip(id,false)
+        // Hidden for now, NOT retired: sogTap, openGoalDialog and the delegated
+        // goal/sog acts stay wired — flip ROW_STATS to bring the column back.
+        +(ROW_STATS?'<span class="jstat">'
+          +'<button class="statbtn" data-act="goal" data-id="'+id+'" title="Goal">⚽<b>'+st.goals+'</b></button>'
+          +'<button class="statbtn" data-act="sog" data-id="'+id+'" title="Shot on goal">🥅<b>'+st.sog+'</b></button>'
+          +'</span>':"")
+        +'</div>';
     }
-    function chip2(id){
-      var pos=posOf(id);
-      return '<button class="jchip'+selCls(id,"field")+'" data-act="chip" data-where="field" data-id="'+id+'">'
-        +'<span class="rail '+pos.toLowerCase()+'">'+pos+'</span>'
-        +'<span class="col"><span class="nm">'+esc(nm(id))+'</span>'
-        +'<span class="pl">'+(offIds.indexOf(id)>=0?'<span class="dot-off"></span>':'')+r1(playedSoFar(lu,api,id))+' of '+sofar+'</span></span>'
-        +'</button>';
-    }
-    if(uiCols===1){
-      box.className="onfield";
-      var groups={GK:[],D:[],F:[]};
-      onNow.forEach(function(id){ groups[posOf(id)].push(id); });
-      box.innerHTML=["GK","D","F"].filter(function(k){ return groups[k].length; }).map(function(k){
-        return '<div class="posrow"><div class="rail '+k.toLowerCase()+'">'+k+'</div><div class="stack">'
-          +groups[k].map(chip1).join("")+'</div></div>';
-      }).join("");
-    } else {
-      box.className="onfield cols2";
-      box.innerHTML=onNow.map(chip2).join("");
-    }
+    // Rows are never re-sorted by played time: group order is fixed GK, D, F,
+    // and within a group the existing period order holds.
+    box.className="onfield";
+    var groups={GK:[],D:[],F:[]};
+    onNow.forEach(function(id){ groups[posOf(id)].push(id); });
+    box.innerHTML=["GK","D","F"].filter(function(k){ return groups[k].length; }).map(function(k){
+      return '<div class="posrow"><div class="rail '+k.toLowerCase()+'">'+k+'</div><div class="stack">'
+        +groups[k].map(chip1).join("")+'</div></div>';
+    }).join("");
 
     var rows;
     if(brk){
@@ -1162,21 +1171,9 @@
     sub.innerHTML=rows;
 
     if(benchSorted.length){
-      var most=benchSorted[benchSorted.length-1].v, rec=benchSorted[0];
       note.innerHTML='<div class="bhrow"><span class="bh">'+(brk?"Sitting out period "+(pi+1):"Bench")+'</span>'
-        +'<span class="rec">↑ '+esc(nm(rec.id))+' has played '+r1(rec.v)+' of '+sofar
-        +(brk?" — swap them in now if that is not right.":" — put them on next.")+'</span></div>'
-        +'<div class="benchchips">'+benchSorted.map(function(b,i){
-          // dot-ON, not dot-off: on the field the dot means "next off" (cone),
-          // on the bench it means "next on" (green). Same colour read as the
-          // same meaning in two places where the meanings are opposite.
-          return '<button class="jchip bench'+selCls(b.id,"bench")+'" data-act="chip" data-where="bench" data-id="'+b.id+'">'
-            +(i===0&&b.v<most-1e-9?'<span class="dot-on"></span>':'')
-            +'<span class="nm">'+esc(nm(b.id))+'</span>'
-            +needleHtml(posTot[b.id])
-            +ppHtml(b.v,wasSplit(lu,api,b.id))
-            +'</button>';
-        }).join("")+'</div>';
+        +'<span class="bkey">Notch = '+(lu.Q>1?lu.Q-1:lu.Q)+'-period minimum</span></div>'
+        +'<div class="benchchips">'+benchSorted.map(function(b){ return fieldChip(b.id,true); }).join("")+'</div>';
     } else {
       note.innerHTML='<span class="bh">Everyone\'s on the field this period.</span> Tap two players to swap positions.';
     }
@@ -1186,21 +1183,14 @@
   // so no played credit moves; only the plan and its projection ledger do.
   function pickNextKeeper(id){
     var lu=state.lineup; if(!lu||!lu.keeper) return;
-    var pi=curPi(); if(pi+1>=lu.Q) return;
-    var old=lu.gk[pi+1];
-    if(old===id||lu.periods[pi+1].indexOf(id)<0){ nkOpen=false; renderOnField(); return; }
-    lu.gk[pi+1]=id;
-    if(old) lu.gkActual[old]=(lu.gkActual[old]||0)-1;
-    lu.gkActual[id]=(lu.gkActual[id]||0)+1;
-    var es=(lu.app||[])[pi+1]||[], eOld=null, eNew=null;
-    es.forEach(function(e){ if(e.id===old&&e.pos==="GK") eOld=e; if(e.id===id&&e.pos!=="GK") eNew=e; });
-    if(eOld) eOld.pos=eNew?eNew.pos:"D";   // the old keeper takes the new one's spot
-    if(eNew) eNew.pos="GK";
-    lu.handEdited=true;
-    logEvent("keeper_next",{out:old,"in":id,forPeriod:pi+2},id);
+    var q=curPi()+1; if(q>=lu.Q) return;
+    var res=LineupCore.setFutureKeeper(lu,q,id);
     nkOpen=false;
+    if(!res){ renderOnField(); return; }
+    lu.handEdited=true;
+    logEvent("keeper_next",{out:res.out,"in":id,forPeriod:q+1},id);
     save(); renderLineup(); renderOnField();
-    toast(nameOf(id)+" set to keep period "+(pi+2));
+    toast(nameOf(id)+" set to keep period "+(q+1));
   }
 
   /* ---------- clock edit: tap → confirm → set-clock sheet (1d) ---------- */
@@ -1235,6 +1225,322 @@
     logEvent("clock_set",{from:from,to:clkDraft});
     closeClk(); save(); renderGame();
     toast("Clock set to "+mmssTxt(clkDraft)+" — paused");
+  }
+
+  /* ---------- player card ----------
+     One sheet, three framings. The design ships 1a (over Game Day), 1b (full
+     screen from the Roster) and 1c (a child who isn't playing today) — but its
+     own note says "blocks and their order are identical in all three; only the
+     chrome and the dismiss change". So this is ONE render: the blocks decide for
+     themselves whether they have anything to say, and the action bar drops the
+     rows that don't apply. ponytail: three layouts would be three things to keep
+     in step for one difference nobody can see side by side on a phone.
+
+     Everything here is derived from what the app already stores — lu.app,
+     lu.periods, state.played/kept, posTotals and g.recent — except the two
+     genuinely new fields, p.num (jersey) and p.notes. The third "new" in the
+     design, stamped attendance, is DERIVED instead: a player with appearance
+     rows in a game played it. That skips a schema change for a number the
+     archive can already answer. */
+  var card=null;              // player id while the sheet is open
+  function minPeriods(){ return Math.ceil(maxPeriods()*0.75); }   // the guide's 3-of-4
+  function posName(p){ return p==="GK"?"in goal":(p==="D"?"defense":"forward"); }
+  // Season periods played: banked games plus what has ACTUALLY run this game.
+  // Not totPlayed() — lu.actual is a whole-game projection and would credit a
+  // player periods they have not walked onto the field for yet.
+  function seasonPlayed(id){
+    var lu=state.lineup;
+    return (state.played[id]||0) + (lu?playedSoFar(lu,curPi(),id):0);
+  }
+  // Per-period share for one player, from the ledger the chips already read.
+  function fracIn(q,id){
+    var n=0;
+    (((state.lineup||{}).app||[])[q]||[]).forEach(function(e){ if(e.id===id&&e.frac>1e-9) n+=e.frac; });
+    return n;
+  }
+  function posIn(q,id){
+    var by={}, best=null;
+    (((state.lineup||{}).app||[])[q]||[]).forEach(function(e){ if(e.id===id&&e.frac>1e-9) by[e.pos]=(by[e.pos]||0)+e.frac; });
+    Object.keys(by).forEach(function(p){ if(!best||by[p]>by[best]) best=p; });
+    return best;
+  }
+
+  // Per-game appearance rows, cached in the archive (device-local, like games)
+  // rather than on the synced doc — roster x games x positions is too much to
+  // push through the save file every keystroke.
+  function cardGames(id){
+    var arch=loadArchive(), by={};
+    (arch.byGame||[]).forEach(function(r){
+      if(r.player_id!==id) return;
+      var e=by[r.game_id]=by[r.game_id]||{periods:0,pos:{}};
+      e.periods+=(+r.periods||0); e.pos[r.pos]=(e.pos[r.pos]||0)+(+r.periods||0);
+    });
+    return (arch.games||[]).filter(function(g){ return g.id!==(state.game&&state.game.gid); })
+      .map(function(g){ return {g:g, a:by[g.id]||null}; });
+  }
+  async function loadCardData(){
+    if(!BACKEND||!TEAM) return;
+    var base="/api/team/"+encodeURIComponent(TEAM), season=encodeURIComponent(state.season||"");
+    var gid=encodeURIComponent((state.game&&state.game.gid)||"");
+    try{
+      var arch=loadArchive();
+      var rg=await fetch(base+"/games?season="+season);
+      if(rg.ok) arch.games=(await rg.json()).games||[];
+      var rp=await fetch(base+"/positions?season="+season+"&exclude="+gid+"&byGame=1");
+      if(rp.ok){
+        var j=await rp.json(), map={};
+        (j.positions||[]).forEach(function(r){ (map[r.player_id]=map[r.player_id]||{})[r.pos]=r.periods; });
+        state.posTotals=map; saveLocal();     // cache only — must not re-trigger the push cycle
+        arch.byGame=j.byGame||[];
+      }
+      saveArchive(arch);
+      if(card) drawCard();
+    }catch(e){}
+  }
+
+  function openCard(id){
+    if(!byId(id)) return;
+    card=id;
+    var dlg=$("#cardDialog");
+    if(dlg&&dlg.showModal&&!dlg.open) dlg.showModal();
+    drawCard();
+    loadCardData();
+  }
+  function closeCard(){ card=null; var d=$("#cardDialog"); if(d&&d.open) d.close(); }
+
+  function drawCard(){
+    var dlg=$("#cardDialog"), id=card; if(!dlg||!id) return;
+    var p=byId(id); if(!p){ closeCard(); return; }
+    var lu=state.lineup, g=state.game, Q=maxPeriods(), mp=minPeriods();
+    var pi=lu?editPi():0, api=lu?curPi():0;
+    var onField=!!(lu && (lu.periods[pi]||[]).indexOf(id)>=0);
+    var isGk=!!(lu && lu.keeper && (lu.gk||[])[pi]===id);
+    var sheetOf=!!(lu && rosterState(p)==="in");             // on today's sheet at all
+    var today=lu?playedSoFar(lu,api,id):0;
+    var kept=totKept(lu,id);
+    var tot=posTotals(lu)[id]||{GK:0,D:0,F:0};
+    var season=seasonPlayed(id);
+
+    // Rank: the squad ordered by season periods. "6th of 8" is the sentence the
+    // design leads with, and it is the only comparison a parent ever asks about.
+    var squad=state.roster.map(function(x){ return {id:x.id, v:seasonPlayed(x.id)}; })
+      .sort(function(a,b){ return b.v-a.v; });
+    var rank=squad.map(function(x){ return x.id; }).indexOf(id)+1;
+    var avg=squad.reduce(function(a,x){ return a+x.v; },0)/Math.max(1,squad.length);
+    var top=squad.length?squad[0].v:0;
+
+    // Periods still to play in this game, and how many of them this child needs
+    // to clear the minimum. Positive spare = they can sit; negative = they must
+    // go back on. This is the number the whole Today block exists for.
+    var left=lu?((Q-1-api)+remFrac()):0;
+    var need=Math.max(0,mp-today), spare=left-need;
+
+    function pill(cls,txt){ return '<span class="cpill '+cls+'">'+esc(txt)+'</span>'; }
+    function tile(v,lab,cls){ return '<div class="ctile"><b class="'+(cls||"")+'">'+esc(v)+'</b><i>'+esc(lab)+'</i></div>'; }
+
+    /* -- head -- */
+    var sub;
+    if(!sheetOf) sub="Marked "+(rosterState(p)==="late"?"late":"out")+" today";
+    else if(!lu) sub="No lineup built yet";
+    else if(onField) sub=(isGk?"In goal":posName(posIn(pi,id)||"F").replace(/^./,function(c){return c.toUpperCase();}))
+      +" · on the field · period "+(pi+1)+" of "+Q;
+    else sub="On the bench · period "+(pi+1)+" of "+Q;
+
+    var pills="";
+    if(!sheetOf) pills+=pill("mute","Out today");
+    else if(onField) pills+=pill("go",isGk?"In goal":"On the field");
+    else pills+=pill("mute","On the bench");
+    if(lu&&lu.keeper&&kept<0.05) pills+=pill("warn","Never in goal");
+    else if(kept>0.05) pills+=pill("mute",r1(kept)+"p in goal this season");
+    if(sheetOf&&lu&&today+left<mp-1e-9) pills+=pill("warn","Short of the minimum");
+
+    // "Name and number go grey when a child isn't in today's squad — the only
+    // colour change between states" (design 1c).
+    var head='<div class="chead'+(sheetOf?"":" out")+'">'
+      +'<div class="ctitle">'
+      +'<span class="nm">'+esc(p.name)+'</span>'
+      +'<button class="cnum" data-act="card-num">'+(p.num?"#"+esc(p.num):"+ #")+'</button>'
+      +'</div>'
+      +'<div class="csub">'+esc(sub)+'</div>'
+      +'<div class="cpills">'+pills+'</div>'
+      +'<button class="cclose" data-act="card-close" aria-label="Close">×</button>'
+      +'</div>';
+
+    /* -- today -- */
+    var todayBody;
+    if(!lu){
+      todayBody='<p class="cnote">No lineup for today yet. Build one on Roster &amp; Lineup and this fills in.</p>';
+    } else if(!sheetOf){
+      todayBody='<p class="cnote">Not on today\'s sheet. They were marked out before the lineup was built, so nothing is counted against them — the season figures below are unaffected.</p>';
+    } else {
+      var bars="";
+      for(var q=0;q<Q;q++){
+        var f=Math.min(1,fracIn(q,id));
+        var cls = q<api ? "done" : (q===api ? "live" : "plan");
+        bars+='<span class="cbar '+cls+'"><i style="width:'+Math.round(f*100)+'%"></i></span>';
+      }
+      var labs=""; for(var q2=0;q2<Q;q2++) labs+='<span>P'+(q2+1)+'</span>';
+      var verdict = spare>=0
+        ? '<b class="ok">+'+r1(spare)+'p spare.</b> They can sit '+r1(spare)+' of a period more and still clear the '+mp+'-period minimum.'
+        : '<b class="bad">'+r1(-spare)+'p short.</b> There is not enough game left to reach the '+mp+'-period minimum — put them on now.';
+      var dom=posIn(api,id)||posIn(pi,id);
+      todayBody='<div class="cbars">'+bars+'<span class="cnotch" style="left:'+(mp/Q*100)+'%"></span></div>'
+        +'<div class="cbarlabs">'+labs+'</div>'
+        +'<p class="cnote">'+verdict+' The notch is the minimum.</p>'
+        +'<div class="ctiles">'
+        +tile(Math.round(today*state.minsper),"minutes")
+        +tile(r1(today)+"p","of "+Q+" periods")
+        +tile(dom||"—",dom?posName(dom):"not on yet",dom==="GK"?"gk":(dom==="D"?"d":"f"))
+        +'</div>'
+        +'<div class="clist">'+cardTimeline(id).map(function(r){
+          return '<div class="crow"><span class="k">'+esc(r.k)+'</span><span class="v">'+r.v+'</span></div>';
+        }).join("")+'</div>';
+    }
+
+    /* -- season -- */
+    var gsplit=tot.GK||0, dsplit=tot.D||0, fsplit=tot.F||0, gtot=Math.max(1e-9,gsplit+dsplit+fsplit);
+    var seasonBody='<div class="cbig"><b class="tnum">'+r1(season)+'</b>'
+      +'<span>periods played · <b>'+rank+ordinal(rank)+' of '+squad.length+'</b><br>'
+      +(Math.abs(season-avg)<0.05&&Math.abs(season-top)<0.05
+        ? "level with the whole squad"
+        : cmpTxt(season-avg,"the squad average")+", "+cmpTxt(season-top,"the top"))+'</span></div>'
+      +'<div class="csplit">'
+      +'<span class="d" style="width:'+(dsplit/gtot*100)+'%"></span>'
+      +'<span class="f" style="width:'+(fsplit/gtot*100)+'%"></span>'
+      +'<span class="gk" style="width:'+(gsplit/gtot*100)+'%"></span></div>'
+      +'<div class="ckey"><span><i class="d"></i>D '+r1(dsplit)+'</span><span><i class="f"></i>F '+r1(fsplit)
+      +'</span><span><i class="gk"></i>GK '+r1(gsplit)+'</span></div>';
+    if(lu&&lu.keeper&&kept<0.05){
+      var others=state.roster.filter(function(x){ return x.id!==id && totKept(lu,x.id)>0.05; }).length;
+      seasonBody+='<p class="cnote"><b class="bad">Never in goal.</b> '
+        +(others===state.roster.length-1?"The only player on the squad yet to take a turn.":others+" of the squad have had a turn.")+'</p>';
+    }
+    var played=cardGames(id), gp=played.filter(function(x){ return x.a; }).length;
+    seasonBody+='<div class="ctiles">'
+      +tile(played.length?(gp+" of "+played.length):"—","games played")
+      +tile(gp?Math.round((season-today)*state.minsper/gp):"—","avg min / game")
+      +tile(r1(kept),"periods in goal")+'</div>';
+
+    /* -- game over game -- */
+    var gog="";
+    if(lu&&sheetOf&&g.gid) gog+='<div class="crow live"><span class="k">now</span><span class="v">'
+      +esc(state.venue==="away"?"Away":"Home")+' · <b>'+r1(today)+'p</b> so far</span><span class="lv">live</span></div>';
+    gog+=played.slice(0,8).map(function(x){
+      var d=new Date(x.g.started_at), when=(d.getMonth()+1)+"/"+d.getDate();
+      if(!x.a) return '<div class="crow out"><span class="k">'+when+'</span><span class="v">Did not play</span></div>';
+      var poss=["GK","D","F"].filter(function(k){ return x.a.pos[k]>0.05; }).join(" ");
+      return '<div class="crow"><span class="k">'+when+'</span><span class="v"><b>'+r1(x.a.periods)+'p</b> · '
+        +esc(poss)+' · '+x.g.us+'–'+x.g.them+'</span></div>';
+    }).join("");
+    if(!played.length) gog+='<div class="cempty">No archived games yet this season.</div>';
+
+    /* -- notes -- */
+    var notes=(p.notes||[]).map(function(n,i){
+      var d=new Date(n.at), when=(d.getMonth()+1)+"/"+d.getDate();
+      return '<div class="cnoteitem '+(n.kind||"")+'"><span class="k">'+when+(n.period?" · P"+n.period:"")+'</span>'
+        +'<span class="t">'+esc(n.text)+'</span>'
+        +'<button class="x" data-act="card-note-del" data-i="'+i+'" aria-label="Delete note">×</button></div>';
+    }).join("") || '<div class="cempty">No notes yet. ✎ adds one against today\'s period.</div>';
+
+    /* -- actions: a row withdraws itself rather than sitting there wrong -- */
+    var acts="";
+    // The keeper is sub-able like anyone else — applySub carries the goal with
+    // them — so this is on-field vs not, never on-field-and-not-keeper. A keeper
+    // with no primary action at all was the first thing this got wrong.
+    if(onField&&lu) acts+='<button class="btn" data-act="card-sub">Sub now</button>';
+    else if(sheetOf&&lu) acts+='<button class="btn" data-act="card-sub">Put on now</button>';
+    if(onField&&lu&&lu.keeper&&!isGk) acts+='<button class="btn ghost" data-act="card-gk">Into goal</button>';
+    acts+='<button class="btn ghost sq" data-act="card-note" title="Add a note">✎</button>'
+      +'<button class="btn ghost sq" data-act="card-copy" title="Copy summary">⧉</button>';
+    // With no sub to offer, the roster's own IN/LATE/OUT toggle takes the slot —
+    // for a child who isn't playing, that IS the action worth having here.
+    if(!sheetOf||!lu) acts+='<button class="btn ghost" data-act="toggle-present" data-id="'+id+'">'
+      +(rosterState(p)==="in"?"Mark late":(rosterState(p)==="late"?"Mark out":"Mark in"))+'</button>';
+
+    // innerHTML rebuild loses the scroll position, and every action in here
+    // (a note, a number, a sub) redraws — landing the coach back at the top.
+    var keep=dlg.querySelector(".cbody"); keep=keep?keep.scrollTop:0;
+    dlg.innerHTML=head
+      +'<div class="cbody">'
+      +'<div class="cblk"><div class="chd"><span>Today</span><span class="w">'+esc(g.onBreak?"break":"period "+(pi+1))+'</span></div>'+todayBody+'</div>'
+      +'<div class="cblk"><div class="chd"><span>Season</span><span class="w">'+esc(state.season||"")+'</span></div>'+seasonBody+'</div>'
+      +'<div class="cblk"><div class="chd"><span>Game over game</span></div><div class="clist">'+gog+'</div></div>'
+      +'<div class="cblk"><div class="chd"><span>Notes</span></div><div class="cnotes">'+notes+'</div></div>'
+      +'</div>'
+      +'<div class="cacts">'+acts+'</div>';
+    if(keep) dlg.querySelector(".cbody").scrollTop=keep;
+  }
+  function ordinal(n){ var s=["th","st","nd","rd"], v=n%100; return s[(v-20)%10]||s[v]||s[0]; }
+  function cmpTxt(d,what){
+    if(Math.abs(d)<0.05) return "level with "+what;
+    return r1(Math.abs(d))+(d>0?" ahead of ":" behind ")+what;
+  }
+  // Period rows from the ledger, interleaved with this game's sub/keeper events.
+  // g.recent is capped at 8, so the period rows carry the shape and the events
+  // add the clock detail wherever it is still in the buffer.
+  function cardTimeline(id){
+    var lu=state.lineup, rows=[], last=curPi();
+    for(var q=0;q<=last&&q<maxPeriods();q++){
+      var f=fracIn(q,id), pos=posIn(q,id);
+      rows.push({period:q+1, secs:1e9,
+        k:"P"+(q+1), v:f>1e-9 ? '<b>'+r1(Math.min(f,1))+'p</b> · '+esc(posName(pos)) : "sat out"});
+    }
+    (state.game.recent||[]).forEach(function(ev){
+      var d=ev.detail||{};
+      if(ev.kind==="sub"&&d.out===id) rows.push({period:ev.period,secs:ev.secs,k:"P"+ev.period+" · "+mmssTxt(ev.secs),v:"Off — "+esc(nameOf(d["in"]))+" on"});
+      if(ev.kind==="sub"&&d["in"]===id) rows.push({period:ev.period,secs:ev.secs,k:"P"+ev.period+" · "+mmssTxt(ev.secs),v:"On for "+esc(nameOf(d.out))});
+      if(ev.kind==="keeper"&&d["in"]===id) rows.push({period:ev.period,secs:ev.secs,k:"P"+ev.period+" · "+mmssTxt(ev.secs),v:"Into goal for "+esc(nameOf(d.out))});
+    });
+    return rows.sort(function(a,b){ return (a.period-b.period)||(b.secs-a.secs); });
+  }
+
+  function cardSummary(id){
+    var p=byId(id), lu=state.lineup, tot=posTotals(lu)[id]||{};
+    return p.name+(p.num?" #"+p.num:"")+" — "+(state.season||"season")+"\n"
+      +"Today: "+r1(lu?playedSoFar(lu,curPi(),id):0)+" of "+maxPeriods()+" periods ("+Math.round((lu?playedSoFar(lu,curPi(),id):0)*state.minsper)+" min)\n"
+      +"Season: "+r1(seasonPlayed(id))+" periods · "+r1(totKept(lu,id))+" in goal\n"
+      +"Positions: D "+r1(tot.D||0)+" · F "+r1(tot.F||0)+" · GK "+r1(tot.GK||0);
+  }
+
+  function cardAddNote(){
+    var id=card; if(!id) return;
+    ask({title:"Note about "+nameOf(id), body:"Kept on this device and synced with the team doc. Injuries, requests, anything you want next Saturday's you to know.",
+      input:"", placeholder:"e.g. asked to play in goal", ok:"Save note"}).then(function(txt){
+      if(!txt) return;
+      var p=byId(id); if(!p) return;
+      (p.notes=p.notes||[]).unshift({at:nowMs(), period:state.game.period, text:txt});
+      if(p.notes.length>20) p.notes.length=20;
+      save(); drawCard(); toast("Note saved against "+p.name);
+    });
+  }
+  function cardSetNum(){
+    var p=byId(card); if(!p) return;
+    ask({title:"Jersey number", body:"Shown on the card and in the copied summary.", input:p.num||"", placeholder:"e.g. 7", ok:"Save"})
+      .then(function(v){
+        if(v===null) return;
+        p.num=String(v).replace(/[^0-9]/g,"").slice(0,3)||"";
+        save(); drawCard(); renderRoster();
+      });
+  }
+  // Sub straight from the card: the partner is the app's own recommendation, so
+  // this is the ranked list's top pair with one of its ends already chosen.
+  function cardSub(){
+    var lu=state.lineup, id=card; if(!lu||!id) return;
+    var pi=editPi(), on=(lu.periods[pi]||[]).indexOf(id)>=0;
+    var pool=state.roster.filter(function(x){
+      return x.present && ((lu.periods[pi]||[]).indexOf(x.id)>=0)!==on && x.id!==id;
+    }).map(function(x){ return {id:x.id, v:playedSoFar(lu,curPi(),x.id)}; })
+      .sort(function(a,b){ return on ? a.v-b.v : b.v-a.v; });
+    if(!pool.length){ toast(on?"Nobody on the bench to bring on.":"Nobody to come off."); return; }
+    var other=pool[0].id;
+    var outId=on?id:other, inId=on?other:id;
+    ask({title:nameOf(inId)+" on for "+nameOf(outId)+"?",
+      body:nameOf(inId)+" has played "+r1(playedSoFar(lu,curPi(),inId))+"p, "+nameOf(outId)+" "+r1(playedSoFar(lu,curPi(),outId))+"p."
+        +"\n\nThis is the app's own next-sub pick. Cancel and use the field panel to choose someone else.",
+      ok:"Make the sub"}).then(function(ok){
+      if(!ok) return;
+      subNow(outId,inId); drawCard();
+    });
   }
 
   /* ---------- Fix a mistake (3a): corrections, never deletions ---------- */
@@ -1436,14 +1742,11 @@
     return state.roster.filter(function(p){ return p.present; }).map(function(p){ return p.id; })
       .sort(function(a,b){ return totPlayed(lu,a)-totPlayed(lu,b); });
   }
-  // Redraw the unplayed periods at a new field size / keeper setting, with the
-  // same tally discipline buildLineup uses.
+  // The redraw itself is LineupCore.redrawFrom; what stays here is the settings
+  // side of it — the field size is a team setting the coach can see and edit.
   function redrawFuture(lu,pi,N,keeper){
-    tally(lu,pi+1,-1);
-    lu.periods.length=pi+1; lu.gk.length=pi+1; (lu.app=lu.app||[]).length=pi+1;
-    LineupCore.buildPeriods(lu,presentIdsByOwed(lu),{keep:pi+1,Q:lu.Q,N:N,keeper:keeper,kept:state.kept,posTotals:state.posTotals});
-    tally(lu,pi+1,1);
-    lu.N=N; lu.keeper=keeper; lu.handEdited=true;
+    LineupCore.redrawFrom(lu,pi,presentIdsByOwed(lu),
+      {N:N, keeper:keeper, kept:state.kept, posTotals:state.posTotals});
     state.onfield=N;
     var of=$("#onfield"); if(of) of.value=N;
   }
@@ -1469,6 +1772,7 @@
         else if(p.late){ p.late=false; }
         else { p.present=true; p.late=false; }
         save(); renderRoster(); refreshLineup();
+        if(card) drawCard();   // the card owns this toggle too when it has no sub to offer
       }
     }
     else if(act==="build-lineup"){
@@ -1497,6 +1801,7 @@
       var card=document.getElementById("drill-"+t.dataset.id);
       if(card) card.scrollIntoView({block:"start"});
     }
+    else if(act==="passphrase"){ passphraseFlow(); }
     else if(act==="ask-yes"){ askYes(); }
     else if(act==="ask-no"){ askClose(askIsText?null:false); }
     else if(act==="toast-clear"){ clearToasts(); }
@@ -1543,7 +1848,6 @@
     else if(act==="clk-yes"){ clkStep="edit"; clkDraft=Math.max(0,state.game.secs); drawClkDialog(); }
     else if(act==="clk-d"){ clkDraft=Math.max(0,Math.min(3599,clkDraft+(+t.dataset.d))); drawClkDialog(); }
     else if(act==="clk-save"){ saveClock(); }
-    else if(act==="cols"){ setCols(+t.dataset.n); }
     else if(act==="nk-toggle"){ nkOpen=!nkOpen; renderOnField(); }
     else if(act==="nk-pick"){ pickNextKeeper(t.dataset.id); }
     else if(act==="fmt-open"){ fmtOpen=!fmtOpen; fmtMode=null; fmtOffId=null; renderFmtCard(); if(fmtOpen){ var fc=$("#fmtCard"); if(fc&&fc.scrollIntoView) fc.scrollIntoView({block:"nearest"}); } }
@@ -1564,7 +1868,56 @@
     else if(act==="new-season"){ startNewSeason(); }
     else if(act==="log-game"){ toggleLogGame(t.dataset.gid); }
     else if(act==="copy-link"){ copyTeamLink(); }
+    else if(act==="card"){ openCard(t.dataset.id); }
+    else if(act==="card-close"){ closeCard(); }
+    else if(act==="card-num"){ cardSetNum(); }
+    else if(act==="card-note"){ cardAddNote(); }
+    else if(act==="card-note-del"){
+      var np=byId(card), ni=+t.dataset.i;
+      if(np) ask({title:"Delete this note?", body:(np.notes[ni]||{}).text||"", ok:"Delete", danger:true}).then(function(ok){
+        if(!ok) return;
+        np.notes.splice(ni,1); save(); drawCard();
+      });
+    }
+    else if(act==="card-sub"){ cardSub(); }
+    else if(act==="card-gk"){ var cg=card; swapKeeper(cg); drawCard(); }
+    else if(act==="card-copy"){
+      var txt=cardSummary(card);
+      if(navigator.clipboard&&navigator.clipboard.writeText)
+        navigator.clipboard.writeText(txt).then(function(){ toast("Summary copied"); },function(){ toast("Copy failed"); });
+      else toast("Clipboard not available on this browser");
+    }
   });
+  // The design opens the card by HOLDING a chip — the tap itself is already the
+  // select-for-sub gesture and can't be taken. Same 500ms hold everywhere a
+  // player's name appears, so there is one gesture to learn, not three.
+  var holdTimer=null, holdFrom=null;
+  function holdStart(e){
+    var chip=e.target.closest(".jchip[data-id]"); if(!chip) return;
+    holdFrom={x:e.clientX,y:e.clientY};
+    holdTimer=setTimeout(function(){
+      holdTimer=null; buzz(15); openCard(chip.dataset.id);
+    },500);
+  }
+  function holdEnd(){ if(holdTimer){ clearTimeout(holdTimer); holdTimer=null; } holdFrom=null; }
+  document.addEventListener("pointerdown",holdStart);
+  document.addEventListener("pointerup",holdEnd);
+  document.addEventListener("pointercancel",holdEnd);
+  document.addEventListener("pointermove",function(e){
+    if(holdTimer&&holdFrom&&(Math.abs(e.clientX-holdFrom.x)>8||Math.abs(e.clientY-holdFrom.y)>8)) holdEnd();
+  });
+  // A hold that opened the card must not also fire the chip's tap-to-select.
+  document.addEventListener("click",function(e){
+    if(card&&e.target.closest(".jchip[data-id]")){ e.stopPropagation(); e.preventDefault(); }
+  },true);
+  (function(){
+    var d=$("#cardDialog");
+    if(d){
+      d.addEventListener("close",function(){ card=null; });
+      // click on the backdrop = outside the sheet's own box
+      d.addEventListener("click",function(e){ if(e.target===d) closeCard(); });
+    }
+  })();
   document.addEventListener("input",function(e){
     var t=e.target.closest("[data-act]"); if(!t) return;
     if(t.dataset.act==="set-mins"){ var i=+t.dataset.i; state.practice[i].mins=Math.max(1,+t.value||1); save(); renderPractice(); }
@@ -1800,9 +2153,11 @@
   }
   function toggleTimer(){
     var g=state.game;
+    if(gameOver()){ toast("That game is finished — build a lineup to start the next one."); return; }
     if(atFullTime()){ nextPeriod(); return; }   // Start is now Finish the game
     if(g.secs<=0){ g.secs=state.minsper*60; }
     g.running=!g.running; g.started=true;   // from here on, rebuilds must not rewrite this period
+    if(g.running&&state.lineup&&!g.onBreak) LineupCore.ivOpen(state.lineup,curPi());   // kickoff of a period opens its interval runs
     g.stoppedAt=g.running?0:nowMs();        // lets Fix a mistake offer "count that stop as played"
     if(g.running&&!g.startedAt){
       g.startedAt=nowMs();                  // kickoff: the game gets its archive row
@@ -1822,7 +2177,7 @@
   // spliced on undo, so an early sub would fall off it and re-enable Reset.
   function canReset(){
     var g=state.game, lu=state.lineup;
-    if(g.onBreak) return false;
+    if(g.onBreak||gameOver()) return false;
     if(g.secs>=state.minsper*60) return false;          // nothing to reset
     var es=(lu&&lu.app&&lu.app[curPi()])||[];
     return !es.some(function(e){ return e.frac<1-1e-9; });
@@ -1847,6 +2202,7 @@
   // skip the rest of a break, or (on the last period) close out full time.
   function nextPeriod(){
     var g=state.game, last=g.period>=maxPeriods();
+    if(gameOver()){ toast("That game is finished — build a lineup to start the next one."); return; }
     var q = last
       ? {title:"End the game now?", body:"Final score "+g.us+"–"+g.them+". The game is stamped full time and goes to the archive.", ok:"End the game"}
       : (g.onBreak
@@ -1854,7 +2210,7 @@
         : {title:"End period "+g.period+" now?", body:mmssTxt(g.secs)+" is still on the clock.", ok:"End the period"});
     q.danger=true;
     ask(q).then(function(ok){
-      if(!ok) return;
+      if(!ok||gameOver()) return;             // a second tap while the sheet was open
       if(last){
         g.running=false; g.onBreak=false; stopTicker();
         closeGameRow();                       // full time: stamp the archive row, flush the last period
@@ -1871,6 +2227,7 @@
     var g=state.game, lu=state.lineup;
     if(!g||!g.gid||!g.startedAt||g.endedAt||!lu) return;
     g.endedAt=nowMs();
+    LineupCore.ivClose(lu,curPi());   // a manual full-time end skips periodExpired
     logEvent("period",{final:true,us:g.us,them:g.them});
     queueGameRow();
     queueAppearances(Math.min(g.period,lu.Q));
@@ -1933,12 +2290,117 @@
     pushTimer=setTimeout(function(){ pushTimer=null; push(); },1200);
   }
 
+  /* ---------- team passphrase (optional login) ----------
+     Opt-in per team: a team with no passphrase behaves exactly as it always
+     did, so no existing link stops working. LOCKED means the server refused us
+     and the coach hasn't (or can't) unlock — the app then runs entirely local,
+     which is what local-first is for. It is never a reason to stop working. */
+  var AUTH={exists:false,locked:false,authed:true}, LOCKED=false;
+
+  function authUrl(){ return "/api/team/"+encodeURIComponent(TEAM)+"/auth"; }
+
+  async function loadAuth(){
+    try{
+      var r=await fetch(authUrl(),{headers:{accept:"application/json"}});
+      if(!r.ok) return false;
+      AUTH=await r.json(); return true;
+    }catch(e){ return false; }
+  }
+
+  async function postAuth(body){
+    try{
+      var r=await fetch(authUrl(),{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});
+      return {ok:r.ok,status:r.status};
+    }catch(e){ return {ok:false,status:0}; }
+  }
+
+  // True once the API is usable — the team is open, or this device now holds a
+  // session. Three tries, then the app just runs local-only.
+  async function unlock(why){
+    for(var i=0;i<3;i++){
+      var p=await ask({
+        title:"🔒 Team passphrase",
+        body:why||"This team is passphrase-protected. Enter it to sync with the other coaches' devices.",
+        input:"", pass:true, placeholder:"Passphrase", ok:"Unlock", cancel:"Not now"});
+      if(!p) return false;
+      var res=await postAuth({pass:p});
+      if(res.ok){ AUTH={exists:true,locked:true,authed:true}; LOCKED=false; renderAuthBtn(); return true; }
+      why = res.status===429 ? "Too many tries. Wait a minute, then try again."
+          : res.status===0   ? "No signal — the app keeps working offline. Try again later."
+          : "That didn't match. Try again.";
+      if(res.status===0) return false;
+    }
+    return false;
+  }
+
+  function goLocalOnly(){ LOCKED=true; setPill("off","Locked — not syncing"); renderAuthBtn(); }
+
+  async function ensureAuth(){
+    if(!BACKEND||!TEAM) return true;
+    if(!(await loadAuth())) return true;              // no answer: let the sync path report offline
+    if(!AUTH.locked||AUTH.authed){ LOCKED=false; return true; }
+    if(await unlock()) return true;
+    goLocalOnly(); return false;
+  }
+
+  // Every doc sync goes through this. A 30-day session can expire mid-season,
+  // and the right answer to a 401 is one prompt, not a silent stall.
+  async function authFetch(url,opts){
+    var r=await fetch(url,opts);
+    if(r.status!==401||LOCKED) return r;
+    if(!(await unlock("Your session expired. Enter the team passphrase to keep syncing."))){ goLocalOnly(); return r; }
+    return fetch(url,opts);
+  }
+
+  function renderAuthBtn(){
+    var b=$("#lockBtn"); if(!b) return;
+    b.hidden=!(BACKEND&&TEAM);
+    b.textContent = LOCKED ? "🔒 Locked — unlock"
+      : AUTH.locked ? "🔒 Passphrase on"
+      : "🔓 Add a passphrase";
+  }
+
+  // Locking or unlocking flips the answer for requests that were already in
+  // flight — the season fetches are fire-and-forget, so one of them can come
+  // back 401 and leave the Season tab a refresh behind. Re-read once, after.
+  function afterLockChange(){ renderLog(); refreshPositions(); }
+
+  async function passphraseFlow(){
+    if(!BACKEND||!TEAM){ toast("Passphrases need the backend — this device is running local-only."); return; }
+    await loadAuth();
+    if(AUTH.locked&&!AUTH.authed){ if(await unlock()){ pull(); } return; }
+    if(AUTH.locked){
+      var off=await ask({
+        title:"🔒 This team has a passphrase",
+        body:"Every device opening the team link has to enter it. Remove it and the link on its own opens the team again.",
+        ok:"Remove the passphrase", cancel:"Keep it", danger:true});
+      if(!off) return;
+      var r=await postAuth({newPass:null});
+      if(r.ok){ AUTH={exists:true,locked:false,authed:true}; renderAuthBtn(); afterLockChange(); toast("Passphrase removed — the team link is the only gate again.",true); }
+      else toast("Couldn't remove it — try again when you're online.");
+      return;
+    }
+    var p1=await ask({
+      title:"🔓 Add a passphrase",
+      body:"A second gate on top of the team link: you, the other coaches and your other phones each type it once.\n\nThere is no reset. Forget it and the team can only be unlocked from the database.",
+      input:"", pass:true, placeholder:"At least 6 characters", ok:"Next", cancel:"Cancel"});
+    if(!p1) return;
+    var p2=await ask({title:"Type it again", input:"", pass:true, placeholder:"Confirm", ok:"Lock the team", cancel:"Cancel"});
+    if(!p2) return;
+    if(p1!==p2){ toast("Those two didn't match — nothing changed."); return; }
+    var res=await postAuth({newPass:p1});
+    if(res.ok){ AUTH={exists:true,locked:true,authed:true}; renderAuthBtn(); afterLockChange(); toast("Passphrase set. Every other device will ask for it the next time it syncs.",true); }
+    else if(res.status===400) toast("Too short — use at least 6 characters.");
+    else if(res.status===404) toast("This team hasn't reached the server yet — try again in a moment.");
+    else toast("Couldn't set it — try again when you're online.");
+  }
+
   async function push(force){
-    if(!BACKEND||!TEAM||pushing) return;
+    if(!BACKEND||!TEAM||pushing||LOCKED) return;
     pushing=true;
     var sentAt=(meta.updatedAt||nowMs());
     try{
-      var res=await fetch("/api/team/"+encodeURIComponent(TEAM)+(force?"?force=1":""),{
+      var res=await authFetch("/api/team/"+encodeURIComponent(TEAM)+(force?"?force=1":""),{
         method:"PUT", headers:{"content-type":"application/json"},
         body:JSON.stringify({ doc:JSON.stringify(state), baseRev:(meta.rev||0) })
       });
@@ -1966,9 +2428,9 @@
   }
 
   async function pull(){
-    if(!BACKEND||!TEAM) return;
+    if(!BACKEND||!TEAM||LOCKED) return;
     try{
-      var res=await fetch("/api/team/"+encodeURIComponent(TEAM),{headers:{accept:"application/json"}});
+      var res=await authFetch("/api/team/"+encodeURIComponent(TEAM),{headers:{accept:"application/json"}});
       if(res.status===404){ return push(true); }           // first write creates the team
       if(!res.ok) throw new Error("http "+res.status);
       var data=await res.json();
@@ -1990,13 +2452,11 @@
   }
 
   /* ---------- archive outbox (item 5) ----------
-     Append-only rows with client-generated ids, written locally first and
-     flushed opportunistically on the existing push cadence. Retry is free —
-     INSERT OR IGNORE / keyed upserts make every POST idempotent — so game day
-     still depends on nothing. The outbox is per-team local state, never synced. */
-  var flushing=false;
-  function loadOutbox(){ try{ var o=JSON.parse(localStorage.getItem(KEY+":outbox")); if(o&&o.events) return o; }catch(e){} return {games:{},events:[],appearances:{}}; }
-  function saveOutbox(ob){ try{ localStorage.setItem(KEY+":outbox",JSON.stringify(ob)); }catch(e){} }
+     The queue and its flush live in outbox.js, behind node --test — the
+     re-read-after-await discipline in there once cost a real goal. What stays
+     here is what needs the app: which rows to queue, and when. */
+  function loadOutbox(){ return Outbox.load(KEY); }
+  function saveOutbox(ob){ Outbox.save(KEY,ob); }
 
   // Returns the archive event id so a caller can point back at this row later
   // (a goal record keeps it, and a timestamp correction names it).
@@ -2047,43 +2507,8 @@
   }
 
   async function flushOutbox(){
-    if(!BACKEND||!TEAM||flushing) return;
-    flushing=true;
-    try{
-      var base="/api/team/"+encodeURIComponent(TEAM);
-      var post=function(p,body){ return fetch(base+p,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)}); };
-      // Re-read the outbox after EVERY await, and clear rows by id rather than
-      // by position. logEvent() writes to this same localStorage key, so saving
-      // a snapshot taken before the request drops whatever the coach tapped
-      // while it was in flight — a goal could vanish from the archive.
-      var gamesOk=true;
-      var gids=Object.keys(loadOutbox().games);
-      for(var i=0;i<gids.length;i++){
-        var row=loadOutbox().games[gids[i]];
-        if(!row) continue;
-        var rg=await post("/games",row);
-        if(rg.ok){ var og=loadOutbox(); delete og.games[gids[i]]; saveOutbox(og); } else { gamesOk=false; }
-      }
-      while(gamesOk){
-        var batch=loadOutbox().events.slice(0,200);
-        if(!batch.length) break;
-        var re=await post("/events",{events:batch});
-        if(!re.ok) break;
-        var sent={}; batch.forEach(function(e){ sent[e.id]=1; });
-        var oe=loadOutbox();
-        oe.events=oe.events.filter(function(e){ return !sent[e.id]; });
-        saveOutbox(oe);
-      }
-      while(gamesOk){
-        var cur=loadOutbox(), keys=Object.keys(cur.appearances).slice(0,200);
-        if(!keys.length) break;
-        var ra=await post("/appearances",{rows:keys.map(function(k){ return cur.appearances[k]; })});
-        if(!ra.ok) break;
-        var oa=loadOutbox();
-        keys.forEach(function(k){ delete oa.appearances[k]; }); saveOutbox(oa);
-      }
-      refreshPositions();
-    }catch(e){}finally{ flushing=false; }
+    if(!BACKEND||!TEAM) return;
+    if(await Outbox.flush(KEY,"/api/team/"+encodeURIComponent(TEAM))) refreshPositions();
   }
 
   // Season position totals from the archive, cached on the doc so a
@@ -2132,23 +2557,7 @@
       if(rs.ok){ arch.stats=(await rs.json()).stats||[]; saveArchive(arch); drawLeaders(arch); }
     }catch(e){}
   }
-  // Goals and shots per player, from the event rows. Undos are extra rows, not
-  // deletions, so a goal counts detail.d (+1/−1) and a shot counts its
-  // correction flag as −1 — the same netting the season query does in SQL.
-  function rollupEvents(evs){
-    var by={};
-    (evs||[]).forEach(function(ev){
-      if(!ev.player_id) return;
-      var d={}; try{ d=JSON.parse(ev.detail)||{}; }catch(e){}
-      if(ev.kind!=="goal"&&ev.kind!=="sog") return;
-      var r=by[ev.player_id]=by[ev.player_id]||{goals:0,shots:0,assists:0};
-      if(ev.kind==="goal"){
-        r.goals+=(+d.d||0);
-        if(d.assistId){ var a=by[d.assistId]=by[d.assistId]||{goals:0,shots:0,assists:0}; a.assists+=(+d.d||0); }
-      } else r.shots+=(d.correction?-1:1);
-    });
-    return by;
-  }
+  // The netting of goals/shots out of the append-only log lives in stats.js.
   // Shared by the per-game rollup and the season leaders — same shape, same sort.
   function statRows(by,cls){
     var ids=Object.keys(by).filter(function(id){ return (by[id].goals>0)||(by[id].shots>0)||(by[id].assists>0); });
@@ -2188,19 +2597,8 @@
     var evs=arch.events[g.id];
     if(!evs) return '<div class="hint" style="padding:6px 2px">Loading…</div>';
     if(!evs.length) return '<div class="hint" style="padding:6px 2px">No events recorded.</div>';
-    // A goal logged late gets its time corrected by a later goal_time row that
-    // names it. The archive is append-only, so the fix is applied at read time.
-    var fix={};
-    evs.forEach(function(ev){
-      if(ev.kind!=="goal_time") return;
-      var d={}; try{ d=JSON.parse(ev.detail)||{}; }catch(e){}
-      if(d.ofEvent) fix[d.ofEvent]={period:d.period,secs:d.secs};
-    });
-    var shown=evs.filter(function(ev){ return ev.kind!=="goal_time"; }).map(function(ev){
-      var f=fix[ev.id];
-      return f?Object.assign({},ev,{period:f.period,secs:f.secs,moved:true}):ev;
-    }).sort(function(a,b){ return (a.period-b.period) || (b.secs-a.secs) || (a.at-b.at); });
-    return statRows(rollupEvents(evs),"game")
+    var shown=ArchiveStats.withTimeFixes(evs);
+    return statRows(ArchiveStats.rollupEvents(evs),"game")
       +'<ul class="loglist">'+shown.map(function(ev){
       var s=Math.max(0,ev.secs||0), mm=Math.floor(s/60), ss=s%60;
       return '<li><span class="tnum">P'+ev.period+" · "+mm+":"+(ss<10?"0":"")+ss+"</span> "+esc(evText(ev))
@@ -2208,7 +2606,7 @@
     }).join("")+"</ul>";
   }
   function evText(ev){
-    var d={}; try{ d=JSON.parse(ev.detail)||{}; }catch(e){}
+    var d=ArchiveStats.detailOf(ev);
     if(ev.kind==="goal") return d.d<0
       ? (ev.player_id ? nameOf(ev.player_id)+"'s goal removed" : "Score correction ("+d.side+")")
       : (d.side==="us"
@@ -2319,6 +2717,8 @@
     saveTeamList(list); renderTeamSel();
 
     setPill("saving","Syncing…");
+    await ensureAuth();          // a locked team asks once, here, before anything syncs
+    renderAuthBtn();
     await pull();
     renderLog();
     window.addEventListener("online", function(){ if(isDirty()) push(); else { pull(); flushOutbox(); } });

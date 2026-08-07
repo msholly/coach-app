@@ -1673,6 +1673,991 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-08-04T23:14:00.000Z"
+    },
+    {
+      "id": "bug-101",
+      "timestamp": "2026-08-05T00:34:24.626Z",
+      "error_message": "Missing guard clause",
+      "file": "public/lineup-core.js",
+      "root_cause": "No early return/throw for edge case: !lu || !lu.keeper || !id",
+      "fix": "Added guard clause: if (!lu || !lu.keeper || !id)",
+      "tags": [
+        "auto-detected",
+        "guard-clause",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-05T00:34:24.626Z"
+    },
+    {
+      "id": "bug-102",
+      "timestamp": "2026-08-05T00:35:23.546Z",
+      "error_message": "Significant refactor of ",
+      "file": "public/app.js",
+      "root_cause": "41 lines replaced/restructured",
+      "fix": "Rewrote 42→5 lines (41 removed) | Also: var pi=curPi(); if(pi+1>=lu.Q) return;; var old=lu.gk[pi+1]; | Also: if(!BACKEND||!TEAM||flushing) return;; flushing=true; | Also: // A goal logged late gets its time corrected by a; // names it. The archive is append-only, so the fi",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 4,
+      "last_seen": "2026-08-05T00:36:16.158Z"
+    },
+    {
+      "id": "bug-103",
+      "timestamp": "2026-08-05T00:35:53.003Z",
+      "error_message": "Missing await",
+      "file": "public/app.js",
+      "root_cause": "Async call without await — returned Promise instead of value",
+      "fix": "Added await to async call",
+      "tags": [
+        "auto-detected",
+        "async-fix",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-05T00:35:53.003Z"
+    },
+    {
+      "id": "bug-104",
+      "timestamp": "2026-08-05T00:36:26.159Z",
+      "error_message": "Incorrect value in code",
+      "file": "public/sw.js",
+      "root_cause": "Had \"sideline-shell-v9\"",
+      "fix": "Changed to \"sideline-shell-v10\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-05T00:36:26.159Z"
+    },
+    {
+      "id": "bug-105",
+      "timestamp": "2026-08-05T00:37:49.163Z",
+      "error_message": "Significant refactor of ",
+      "file": "test/lineup.test.mjs",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 9→18 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "mjs"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-05T00:37:49.163Z"
+    },
+    {
+      "id": "bug-106",
+      "timestamp": "2026-08-05T00:42:03.027Z",
+      "error_message": "Missing guard clause",
+      "file": "../AppData/Local/Temp/claude/c--Users-msholly-coach-app/30a59926-e265-4ef8-aeba-adfa9b338c6f/scratchpad/drive.mjs",
+      "root_cause": "No early return/throw for edge case: !els[i]",
+      "fix": "Added guard clause: if (!els[i])",
+      "tags": [
+        "auto-detected",
+        "guard-clause",
+        "mjs"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-05T00:42:03.027Z"
+    },
+    {
+      "id": "bug-107",
+      "timestamp": "2026-08-05T00:43:30.264Z",
+      "error_message": "Incorrect value in code",
+      "file": "../AppData/Local/Temp/claude/c--Users-msholly-coach-app/30a59926-e265-4ef8-aeba-adfa9b338c6f/scratchpad/drive.mjs",
+      "root_cause": "Had \"\nnon-ok responses:\"",
+      "fix": "Changed to \"\\nnon-ok responses: \"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "mjs"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-05T00:43:30.264Z"
+    },
+    {
+      "id": "bug-108",
+      "timestamp": "2026-08-05T17:05:16.372Z",
+      "error_message": "Missing error handling in cookieVal",
+      "file": "src/worker.js",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-05T17:05:16.372Z"
+    },
+    {
+      "id": "bug-109",
+      "timestamp": "2026-08-05T17:05:22.245Z",
+      "error_message": "Wrong condition in logic",
+      "file": "src/worker.js",
+      "root_cause": "Condition was: if (request.method === \"GET\")",
+      "fix": "Changed to: if (denied)",
+      "tags": [
+        "auto-detected",
+        "logic-fix",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-05T17:05:22.245Z"
+    },
+    {
+      "id": "bug-110",
+      "timestamp": "2026-08-05T17:05:30.970Z",
+      "error_message": "Missing await",
+      "file": "src/worker.js",
+      "root_cause": "Async call without await — returned Promise instead of value",
+      "fix": "Added await to async call",
+      "tags": [
+        "auto-detected",
+        "async-fix",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-05T17:05:30.970Z"
+    },
+    {
+      "id": "bug-111",
+      "timestamp": "2026-08-05T17:05:51.316Z",
+      "error_message": "Significant refactor of ",
+      "file": "test/season.test.mjs",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 4→7 lines (2 removed) | Also: // Fay loves forward, Dev loves defense; the coach; const o = { N: 6, keeper: true, prefs: { Fay: \"F\",",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "mjs"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-08-05T17:05:54.638Z"
+    },
+    {
+      "id": "bug-112",
+      "timestamp": "2026-08-05T17:06:58.861Z",
+      "error_message": "Missing error handling in authUrl",
+      "file": "public/app.js",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-05T17:06:58.861Z"
+    },
+    {
+      "id": "bug-113",
+      "timestamp": "2026-08-05T17:07:11.584Z",
+      "error_message": "Wrong condition in logic",
+      "file": "public/app.js",
+      "root_cause": "Condition was: if (!BACKEND||!TEAM)",
+      "fix": "Changed to: if (!BACKEND||!TEAM||LOCKED)",
+      "tags": [
+        "auto-detected",
+        "logic-fix",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-05T17:07:11.584Z"
+    },
+    {
+      "id": "bug-114",
+      "timestamp": "2026-08-05T17:07:28.508Z",
+      "error_message": "Incorrect value in code",
+      "file": "public/app.js",
+      "root_cause": "Had \"ask-yes\"",
+      "fix": "Changed to \"passphrase\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-05T17:07:28.508Z"
+    },
+    {
+      "id": "bug-115",
+      "timestamp": "2026-08-05T17:07:33.354Z",
+      "error_message": "Incorrect value in code",
+      "file": "public/sw.js",
+      "root_cause": "Had \"sideline-shell-v10\"",
+      "fix": "Changed to \"sideline-shell-v11\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-05T17:07:33.354Z"
+    },
+    {
+      "id": "bug-116",
+      "timestamp": "2026-08-05T17:08:31.261Z",
+      "error_message": "Function not marked async",
+      "file": "test/schedule.test.mjs",
+      "root_cause": "Function uses await but wasn't declared async",
+      "fix": "Added async modifier",
+      "tags": [
+        "auto-detected",
+        "async-fix",
+        "mjs"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-05T17:08:31.261Z"
+    },
+    {
+      "id": "bug-117",
+      "timestamp": "2026-08-05T18:30:00.000Z",
+      "error_message": "schedule route tests: expected 501/200, got 500 (worker.fetch threw)",
+      "file": "test/schedule.test.mjs",
+      "root_cause": "The auth gate() added in front of every archive route (including /schedule) calls db.prepare() before dispatch. schedule.test.mjs predates the gate and passed env objects with no DB binding, so gate(undefined,...) threw a TypeError and the catch-all returned 500.",
+      "fix": "Added a noTeamDb stub (prepare().bind().first() -> null: no team row, no passphrase, gate passes) to every worker.fetch env in the file. When a new middleware lands in worker.js, every test file that calls worker.fetch needs its env updated in the same commit — worker.test.mjs was updated, schedule.test.mjs was missed.",
+      "tags": [
+        "auth-gate",
+        "test-env",
+        "worker",
+        "schedule",
+        "pre-existing"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-05T18:30:00.000Z"
+    },
+    {
+      "id": "bug-118",
+      "timestamp": "2026-08-05T18:30:00.000Z",
+      "error_message": "Season simulation: following the ranked #1 sub recommendation every period drifts career playing time 12.4 periods over 20 games on an 8-player 6v6 roster, concentrated on alphabetically-first kids (Ana subbed off 24 times, Ben 22)",
+      "file": "public/app.js",
+      "root_cause": "renderOnField's off/on lists rank by playedSoFar THIS GAME and break ties alphabetically (nm(a.id).localeCompare(nm(b.id))). The builder front-loads the most-owed into early periods, so at any mid-game glance the most-owed are 'longest on the field' and get recommended off; the freed time goes to back-loaded (career-rich) bench players. On exact-division rosters (24 slots / 8 players = exactly 3 each) there is no spare period for the builder to repay with, so the drift compounds directionally every game. With a spare period (9 or 10 present) the builder repays and season spread stays ~1.5.",
+      "fix": "NOT FIXED — documented in test/season.test.mjs ('KNOWN LIMIT' characterization test, fails loudly if the ranking is ever fixed). Candidate fixes reported to the user: (1) break played-time ties by season-owed instead of name, (2) rank by whole-game projection (lu.actual) instead of backward-looking playedSoFar, (3) surface a 'no strong rec' state when the top pair's gap is a tie.",
+      "tags": [
+        "fairness",
+        "sub-recommendation",
+        "season-drift",
+        "tie-break",
+        "known-limit",
+        "simulation"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-05T18:30:00.000Z"
+    },
+    {
+      "id": "bug-119",
+      "timestamp": "2026-08-05T17:10:27.061Z",
+      "error_message": "Significant refactor of ",
+      "file": "README.md",
+      "root_cause": "4 lines replaced/restructured",
+      "fix": "Rewrote 8→40 lines (4 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "md"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-05T17:10:27.061Z"
+    },
+    {
+      "id": "bug-120",
+      "timestamp": "2026-08-05T17:16:55.136Z",
+      "error_message": "Significant refactor of ",
+      "file": "public/app.js",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 9→13 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-05T17:16:55.136Z"
+    },
+    {
+      "id": "bug-121",
+      "timestamp": "2026-08-05T17:17:08.566Z",
+      "error_message": "Incorrect value in code",
+      "file": "public/sw.js",
+      "root_cause": "Had \"sideline-shell-v11\"",
+      "fix": "Changed to \"sideline-shell-v12\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-05T17:17:08.566Z"
+    },
+    {
+      "id": "bug-122",
+      "timestamp": "2026-08-05T17:17:29.161Z",
+      "error_message": "Significant refactor of ",
+      "file": "test/season.test.mjs",
+      "root_cause": "4 lines replaced/restructured",
+      "fix": "Rewrote 12→16 lines (4 removed) | Also: function checkRecs(lu, present, live, rem) {; const { off, on, pairs } = recs(lu, present, live,",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "mjs"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-08-05T17:17:37.565Z"
+    },
+    {
+      "id": "bug-123",
+      "timestamp": "2026-08-05T00:00:00.000Z",
+      "error_message": "Recorded three factually wrong research claims into .wolf/cerebrum.md as settled fact, including a 'Do not re-research' directive that would have suppressed correction",
+      "file": ".wolf/cerebrum.md",
+      "root_cause": "Concluded 'GameChanger has no write API' from absence of writes in ONE hobby GitHub client, and 'login is an emailed OTP' from that client scraping Gmail for a code. Absence of evidence treated as evidence of absence; a single sample generalized to the server. Adversarial probe showed POST /teams/{id}/players and PATCH /players/{id} return 401 (handler exists) vs 404 for unknown paths, and CORS advertises POST/PUT/PATCH/DELETE. Auth is email+password to JWT.",
+      "fix": "Rewrote the cerebrum entries to state 'no PUBLIC API, private write endpoints live but score surface unmapped', corrected the auth mechanism, and replaced the 'Do not re-research' directive with a pointer to docs/gamechanger-integration-plan.md which records the evidence and its limits.",
+      "tags": [
+        "research",
+        "false-conclusion",
+        "cerebrum",
+        "gamechanger",
+        "absence-of-evidence",
+        "adversarial-review"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-05T00:00:00.000Z"
+    },
+    {
+      "id": "bug-124",
+      "timestamp": "2026-08-05T19:00:00.000Z",
+      "error_message": "bug-118 fix: ranked sub list tie-break changed from alphabetical to season-owed",
+      "file": "public/app.js",
+      "root_cause": "See bug-118: renderOnField's off/on lists broke playedSoFar ties with nm().localeCompare(), so the same alphabetically-first kids were the #1 rec every game; on exact-division rosters (no spare period for the builder to repay) career spread ran to 12.4 periods over 20 simulated games.",
+      "fix": "Ties now break by totPlayed() (career + this game's projection, the builder's own owed metric): off list prefers most-season-time first, on list prefers most-owed first; name stays as the final stable key. Mirrored in test/season.test.mjs recs()/checkRecs(), and the KNOWN LIMIT test became the bug-118 guard (spread <= 5). Measured: 12.44 -> 3.73 (aggressive rec-following), 6.72 -> 3.27 (occasional), pref season 5.89 -> 1.30. Residual drift is the backward-looking primary key (playedSoFar); projection-ranking would remove it but changes the list's meaning (who needs a rest now). sw.js CACHE bumped v11 -> v12.",
+      "tags": [
+        "fairness",
+        "sub-recommendation",
+        "tie-break",
+        "season-owed",
+        "fixed"
+      ],
+      "related_bugs": [
+        "bug-118"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-08-05T19:00:00.000Z"
+    },
+    {
+      "id": "bug-125",
+      "timestamp": "2026-08-05T17:20:00.000Z",
+      "error_message": "D1_ERROR: no such column: pass_hash at offset 7 — every /api/team/* request 500ed against a wrangler dev started with --persist-to, even though the throwaway DB definitely had the column",
+      "file": "n/a (local dev tooling)",
+      "root_cause": "TaskStop/Ctrl-C kills the wrangler node wrapper but NOT workerd.exe on Windows. The orphan keeps the port bound and keeps serving the OLD worker against the OLD .wrangler/state D1, so every later 'Ready on http://127.0.0.1:8788' was a lie — the responses came from a zombie. Three separate theories (--persist-to ignored, d1 execute vs dev keying, database_id mismatch) were all wrong; the flag worked fine.",
+      "fix": "Get-Process workerd | Stop-Process -Force before trusting any local verification, and confirm with Get-NetTCPConnection -LocalPort <p> -State Listen + Get-CimInstance Win32_Process CreationDate that the listener was created AFTER the server was started. There were also orphans from previous days still holding the project's local D1.",
+      "tags": [
+        "wrangler",
+        "windows",
+        "workerd",
+        "zombie-process",
+        "local-dev",
+        "verification"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-05T17:20:00.000Z"
+    },
+    {
+      "id": "bug-126",
+      "timestamp": "2026-08-05T17:35:00.000Z",
+      "error_message": "401 on the coach's OWN device immediately after setting a team passphrase (GET /api/team/:id/stats)",
+      "file": "public/app.js",
+      "root_cause": "Locking flips the server's answer for requests already in flight. renderLog()/loadArchive fires /games then /stats sequentially and neither goes through authFetch, so a /stats issued in the window around the lock POST comes back 401 and the Season tab silently keeps stale numbers.",
+      "fix": "afterLockChange() { renderLog(); refreshPositions(); } called after a successful set/remove. Deliberately NOT routing the archive fetches through authFetch — that would pop a passphrase modal from a background refresh. Verified in the headless run: the owner page now logs no 401 at all.",
+      "tags": [
+        "auth",
+        "race",
+        "archive",
+        "season-tab",
+        "fixed"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-05T17:35:00.000Z"
+    },
+    {
+      "id": "bug-127",
+      "timestamp": "2026-08-05T23:05:30.824Z",
+      "error_message": "Incorrect value in code",
+      "file": "src/worker.js",
+      "root_cause": "Had \"WHERE game_id IN (SELECT id FROM games WHERE team",
+      "fix": "Changed to \"WHERE game_id IN (SELECT id FROM games WHERE team",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-05T23:05:30.824Z"
+    },
+    {
+      "id": "bug-128",
+      "timestamp": "2026-08-05T23:07:00.861Z",
+      "error_message": "Missing error handling in minPeriods",
+      "file": "public/app.js",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-05T23:07:00.861Z"
+    },
+    {
+      "id": "bug-129",
+      "timestamp": "2026-08-05T23:07:22.280Z",
+      "error_message": "Missing guard clause",
+      "file": "public/app.js",
+      "root_cause": "No early return/throw for edge case: act===\"log-game\"",
+      "fix": "Added guard clause: if (act===\"log-game\")",
+      "tags": [
+        "auto-detected",
+        "guard-clause",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-05T23:07:22.280Z"
+    },
+    {
+      "id": "bug-130",
+      "timestamp": "2026-08-05T23:08:40.697Z",
+      "error_message": "Incorrect value in code",
+      "file": "public/sw.js",
+      "root_cause": "Had \"sideline-shell-v12\"",
+      "fix": "Changed to \"sideline-shell-v13\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-05T23:08:40.697Z"
+    },
+    {
+      "id": "bug-131",
+      "timestamp": "2026-08-05T23:12:58.503Z",
+      "error_message": "Wrong return value",
+      "file": "../AppData/Local/Temp/claude/c--Users-msholly-coach-app/1c8e35bb-1450-4657-98a0-32d80e92ac8e/scratchpad/card.mjs",
+      "root_cause": "Was returning: { period: s.game.period, secs: s.game.secs, recent",
+      "fix": "Now returns: s ? { key: k[0], period: s.game.period, secs: s.ga",
+      "tags": [
+        "auto-detected",
+        "return-value",
+        "mjs"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-08-05T23:14:30.769Z"
+    },
+    {
+      "id": "bug-132",
+      "timestamp": "2026-08-05T23:13:57.000Z",
+      "error_message": "Incorrect value in code",
+      "file": "../AppData/Local/Temp/claude/c--Users-msholly-coach-app/1c8e35bb-1450-4657-98a0-32d80e92ac8e/scratchpad/probe.mjs",
+      "root_cause": "Had \"file:///C:/Program Files/nodejs/node_modules/open",
+      "fix": "Changed to \"file:///C:/Program Files/nodejs/node_modules/open",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "mjs"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-05T23:13:57.001Z"
+    },
+    {
+      "id": "bug-133",
+      "timestamp": "2026-08-05T23:15:17.834Z",
+      "error_message": "Significant refactor of ",
+      "file": "public/app.css",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 5→8 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "css"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-05T23:15:17.834Z"
+    },
+    {
+      "id": "bug-134",
+      "timestamp": "2026-08-05T23:15:25.138Z",
+      "error_message": "Missing await",
+      "file": "../AppData/Local/Temp/claude/c--Users-msholly-coach-app/1c8e35bb-1450-4657-98a0-32d80e92ac8e/scratchpad/card.mjs",
+      "root_cause": "Async call without await — returned Promise instead of value",
+      "fix": "Added await to async call",
+      "tags": [
+        "auto-detected",
+        "async-fix",
+        "mjs"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-08-05T23:17:37.477Z"
+    },
+    {
+      "id": "bug-135",
+      "timestamp": "2026-08-05T23:16:21.089Z",
+      "error_message": "Incorrect value in code",
+      "file": "public/app.js",
+      "root_cause": "Had \" in goal\"",
+      "fix": "Changed to \"p in goal this season\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 3,
+      "last_seen": "2026-08-05T23:19:42.068Z"
+    },
+    {
+      "id": "bug-136",
+      "timestamp": "2026-08-05T23:16:28.094Z",
+      "error_message": "Wrong condition in logic",
+      "file": "public/app.js",
+      "root_cause": "Condition was: if (onField&&!isGk&&lu)",
+      "fix": "Changed to: if (onField&&lu)",
+      "tags": [
+        "auto-detected",
+        "logic-fix",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-05T23:16:28.094Z"
+    },
+    {
+      "id": "bug-137",
+      "timestamp": "2026-08-05T23:17:45.635Z",
+      "error_message": "Significant refactor of ",
+      "file": "../AppData/Local/Temp/claude/c--Users-msholly-coach-app/1c8e35bb-1450-4657-98a0-32d80e92ac8e/scratchpad/card.mjs",
+      "root_cause": "4 lines replaced/restructured",
+      "fix": "Rewrote 7→13 lines (4 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "mjs"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-05T23:17:45.636Z"
+    },
+    {
+      "id": "bug-138",
+      "timestamp": "2026-08-05T23:22:18.783Z",
+      "error_message": "Player card sheet stayed on the page after closing, and a hold on a Game Day chip stopped opening it",
+      "file": "public/app.css",
+      "root_cause": "dialog.sheet.cardsheet carried display:flex unconditionally. An author display rule beats the UA dialog:not([open]){display:none}, so the closed <dialog> rendered in normal flow at the foot of body.",
+      "fix": "Moved display/flex-direction onto dialog.sheet.cardsheet[open]; the base rule now only sets width/max-height/padding/overflow.",
+      "tags": [
+        "css",
+        "dialog",
+        "display",
+        "player-card",
+        "ua-stylesheet"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-05T23:22:18.783Z"
+    },
+    {
+      "id": "bug-139",
+      "timestamp": "2026-08-05T23:22:18.783Z",
+      "error_message": "Player card showed no primary action at all when the card was opened on the keeper",
+      "file": "public/app.js",
+      "root_cause": "The action bar gated Sub now on onField && !isGk (to keep it distinct from Into goal), so a keeper matched neither branch and got only the icon buttons.",
+      "fix": "Sub now is now on-field vs not-on-field. LineupCore.applySub already carries the goal to the incoming player, so a keeper is sub-able like anyone else.",
+      "tags": [
+        "player-card",
+        "keeper",
+        "ui",
+        "actions"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-05T23:22:18.783Z"
+    },
+    {
+      "id": "bug-140",
+      "timestamp": "2026-08-06T00:05:00.000Z",
+      "error_message": "A request to the Cloudflare API (/accounts/.../d1/database/.../import) failed. Authentication error [code: 10000] — running `wrangler d1 execute coach-sideline-db --remote --file=./migrations/0002_teams_pass.sql`",
+      "file": "README.md, package.json (db:init)",
+      "root_cause": "`--file` uploads through D1's /import endpoint, which rejects an OAuth (`wrangler login`) token even when `wrangler whoami` shows Super Administrator with d1 (write). The /query endpoint accepts the same token, so `--command` works. NOT a permissions problem on the account.",
+      "fix": "Run remote migrations with --command per statement (or export a real CLOUDFLARE_API_TOKEN with D1 Edit for the import path). Documented in README under Schema migrations.",
+      "tags": [
+        "d1",
+        "wrangler",
+        "oauth",
+        "migration",
+        "remote",
+        "fixed"
+      ],
+      "related_bugs": [
+        "bug-141"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-08-06T00:05:00.000Z"
+    },
+    {
+      "id": "bug-141",
+      "timestamp": "2026-08-06T00:10:00.000Z",
+      "error_message": "no such table: games (remote D1). The production database held ONLY the teams table — games, game_events, appearances and push_subs were never created.",
+      "file": "package.json (db:init), remote D1",
+      "root_cause": "`npm run db:init` is `wrangler d1 execute --remote --file=./schema.sql`, which hits the /import endpoint and fails auth under an OAuth login (see bug-140). It has silently never worked, so every table added to schema.sql after the original `teams` existed locally and nowhere else. Undetected because the remote DB has 0 teams — nobody had exercised the deployed backend, so no archive write ever 500ed in front of a user.",
+      "fix": "Created the four tables + four indexes on remote with --command (all IF NOT EXISTS; the teams table and its rows untouched). Remote now: teams, games, game_events, appearances, push_subs + ix_games_team, ix_events_game, ix_app_player, ix_push_team. README now says db:init cannot set up a remote database and gives the sqlite_master check to run before trusting a deploy.",
+      "tags": [
+        "d1",
+        "schema",
+        "production",
+        "deploy",
+        "silent-failure",
+        "fixed"
+      ],
+      "related_bugs": [
+        "bug-140"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-08-06T00:10:00.000Z"
+    },
+    {
+      "id": "bug-142",
+      "timestamp": "2026-08-06T04:28:48.660Z",
+      "error_message": "Significant refactor of ",
+      "file": "public/app.js",
+      "root_cause": "33 lines replaced/restructured",
+      "fix": "Rewrote 41→53 lines (33 removed) | Also: var most=benchSorted[benchSorted.length-1].v, rec=; +'<span class=\"rec\">↑ '+esc(nm(rec.id))+' has play",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-08-06T04:29:38.741Z"
+    },
+    {
+      "id": "bug-143",
+      "timestamp": "2026-08-06T04:30:51.688Z",
+      "error_message": "Significant refactor of ",
+      "file": "public/app.css",
+      "root_cause": "16 lines replaced/restructured",
+      "fix": "Rewrote 33→59 lines (16 removed) | Also: /* Bench — least playing time first, full-width ro; field panel (above the sub list), so it needs the ",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "css"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-08-06T04:31:22.781Z"
+    },
+    {
+      "id": "bug-144",
+      "timestamp": "2026-08-06T04:31:09.742Z",
+      "error_message": "CSS fix: color, padding-top",
+      "file": "public/app.css",
+      "root_cause": "color: #4b544a → #14180f; padding-top: 11px → 2px",
+      "fix": "Changed color: #4b544a → #14180f; padding-top: 11px → 2px",
+      "tags": [
+        "auto-detected",
+        "style-fix",
+        "css"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-06T04:31:09.743Z"
+    },
+    {
+      "id": "bug-145",
+      "timestamp": "2026-08-06T04:31:31.110Z",
+      "error_message": "Incorrect value in code",
+      "file": "public/sw.js",
+      "root_cause": "Had \"sideline-shell-v13\"",
+      "fix": "Changed to \"sideline-shell-v14\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-06T04:31:31.110Z"
+    },
+    {
+      "id": "bug-146",
+      "timestamp": "2026-08-06T04:33:54.760Z",
+      "error_message": "Missing error handling in unknown",
+      "file": "test/iv.test.mjs",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "mjs"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-06T04:33:54.760Z"
+    },
+    {
+      "id": "bug-147",
+      "timestamp": "2026-08-06T04:45:00.000Z",
+      "error_message": "iv.test.mjs full-time fixture: expected 'met', got 'short' for Neel and Reyansh",
+      "file": "test/iv.test.mjs",
+      "root_cause": "The 8b acceptance sim has ZERO aggregate slack (8 kids x 3 = 24 = 4x6 slots), so every mid-period absence (injury, tired) permanently converts to a 'short' verdict at full time unless the coach gives the minutes back. The first fixture draft assumed only Jeffrey (the injury) would read short; Neel (came off tired, 2.3p) and Reyansh (nosebleed, 2.8p) correctly read short too.",
+      "fix": "Fixture now asserts shorts for Jeffrey 0.4p, Neel 0.7p, Reyansh 0.2p and 'met' for the five others - the verdict surfacing this is the feature working, not a bug in minVerdict.",
+      "tags": [
+        "iv-ledger",
+        "verdict",
+        "test-fixture",
+        "zero-slack"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-06T04:45:00.000Z"
+    },
+    {
+      "id": "bug-148",
+      "timestamp": "2026-08-06T17:47:12.176Z",
+      "error_message": "Significant refactor of ",
+      "file": "public/app.js",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 8→11 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-06T17:47:12.176Z"
+    },
+    {
+      "id": "bug-149",
+      "timestamp": "2026-08-06T17:47:18.137Z",
+      "error_message": "Incorrect value in code",
+      "file": "public/sw.js",
+      "root_cause": "Had \"sideline-shell-v14\"",
+      "fix": "Changed to \"sideline-shell-v15\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-06T17:47:18.137Z"
+    },
+    {
+      "id": "bug-150",
+      "timestamp": "2026-08-06T17:49:55.434Z",
+      "error_message": "Missing error handling in unknown",
+      "file": "../AppData/Local/Temp/claude/c--Users-msholly-coach-app/30be4ee3-5b31-41a7-b35b-642275ab0a97/scratchpad/drive8b-p2.mjs",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block | Also: justOn: [...document.querySelectorAll(\".field-mini .jchip\")]; ivInStore: (() => { try { const t = localStorage.getItem(\"ay | Also: await sleep(1200);   // static markup exists before boot() b; for (let i = 0; i < 3; i++) {",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "mjs"
+      ],
+      "related_bugs": [],
+      "occurrences": 3,
+      "last_seen": "2026-08-06T17:55:26.096Z"
+    },
+    {
+      "id": "bug-151",
+      "timestamp": "2026-08-06T18:15:00.000Z",
+      "error_message": "Live 8b panel showed 'Connoron from now' run-together text, no tracks/strips, every player 'on from now' at 1p played",
+      "file": "public/app.js",
+      "root_cause": "Mixed stale shell: the long-running wrangler dev (zombie workerd tree) / v13 SW cache served NEW app.js beside OLD app.css and OLD state.js. Old CSS = the new spans render unstyled inline (name+verdict concatenate, tracks invisible). Old state.js = fixup never calls ensureIv, so lu.iv stays empty and ivPlayed returns 0 for everyone -> every verdict reads 'on from now'. Not an implementation gap: disk files were correct and rendered right against a fresh server.",
+      "fix": "renderOnField now calls LineupCore.ensureIv itself before reading lu.iv (belt-and-braces for mixed-version shells and docs synced from pre-iv devices); SW CACHE bumped to v15; stale wrangler dev tree killed and restarted fresh on 8788. Verified by stripping lu.iv from the saved doc and truly reloading: verdicts stay correct and varied.",
+      "tags": [
+        "stale-shell",
+        "service-worker",
+        "mixed-versions",
+        "iv-ledger",
+        "workerd-zombie"
+      ],
+      "related_bugs": [
+        "bug-125"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-08-06T18:15:00.000Z"
+    },
+    {
+      "id": "bug-156",
+      "timestamp": "2026-08-06T00:00:00.000Z",
+      "error_message": "User: 'Check the Credited for... logic. Does this mean that players are earning playtime that is in the future? (scheduled)'",
+      "file": "public/app.js, public/lineup-core.js",
+      "root_cause": "buildPeriods() stamps every planned period frac:1 and tally() adds +1 for every future period, so lu.actual/lu.gkActual/lu.app are whole-game PROJECTIONS. playedThrough()/seasonPlayed() correctly discount unplayed periods, but totKept() (app.js:249) and LineupCore.positionTotals() (lineup-core.js:48, no `upto` cap) do not — so 'periods in goal', the 'Xp in goal this season' pill, the season D/F/GK split bar, and the lineup table 'D · F' + 'Season' columns all count periods that have not been played yet.",
+      "fix": "FIXED. positionTotals(lu, cached, upto, live, rem) now caps at periods played and discounts the live period the playedThrough way — only the ACTIVE entry is trimmed, because a swap already cut the entry it replaced down to what it really got. playedThrough gained an optional `pos` filter with the same active-entry rule: unfiltered, a mid-period swap leaves the two entries summing to 1 so a blanket discount is right, but filtered to one position that invariant is gone and it would double-charge. app.js: a new posTotals(lu) wrapper replaces all 4 display call sites (444, 1040, 1310, 1487); totKept = state.kept + playedThrough(...,'GK'). Build-time ordering (totPlayed tiebreaks at app.js:300/1066/1732, posCount inside buildPeriods) deliberately left on the projection — bug-118 depends on it. Verified: new test/credit.test.mjs 6/6, full suite 115/115 (baseline was 109/109); negative control re-running the same tests against the old totKept/positionTotals fails 5 of 6, the 6th being the full-time convergence guard that must pass both ways.",
+      "tags": [
+        "fairness-ledger",
+        "future-periods",
+        "positionTotals",
+        "totKept",
+        "player-card",
+        "game-day",
+        "fixed"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-06T00:00:00.000Z"
+    },
+    {
+      "id": "bug-153",
+      "timestamp": "2026-08-06T19:48:09.145Z",
+      "error_message": "Missing guard clause",
+      "file": "public/lineup-core.js",
+      "root_cause": "No early return/throw for edge case: e.frac <= 1e-9",
+      "fix": "Added guard clause: if (e.frac <= 1e-9)",
+      "tags": [
+        "auto-detected",
+        "guard-clause",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-06T19:48:09.145Z"
+    },
+    {
+      "id": "bug-154",
+      "timestamp": "2026-08-06T19:48:22.795Z",
+      "error_message": "Significant refactor of ",
+      "file": "public/lineup-core.js",
+      "root_cause": "4 lines replaced/restructured",
+      "fix": "Rewrote 20→29 lines (4 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-06T19:48:22.795Z"
+    },
+    {
+      "id": "bug-155",
+      "timestamp": "2026-08-06T19:48:46.623Z",
+      "error_message": "Missing guard clause",
+      "file": "public/app.js",
+      "root_cause": "No early return/throw for edge case: !lu",
+      "fix": "Added guard clause: if (!lu)",
+      "tags": [
+        "auto-detected",
+        "guard-clause",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-06T19:48:46.623Z"
+    },
+    {
+      "id": "bug-156",
+      "timestamp": "2026-08-06T19:57:06.519Z",
+      "error_message": "Wrong condition in logic",
+      "file": "public/app.js",
+      "root_cause": "Condition was: if (bb)",
+      "fix": "Changed to: if (pd)",
+      "tags": [
+        "auto-detected",
+        "logic-fix",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 5,
+      "last_seen": "2026-08-06T19:57:40.313Z"
+    },
+    {
+      "id": "bug-157",
+      "timestamp": "2026-08-06T19:57:17.282Z",
+      "error_message": "Incorrect value in code",
+      "file": "public/index.html",
+      "root_cause": "Had \"period-next\"",
+      "fix": "Changed to \"periodPlus\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "html"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-06T19:57:17.282Z"
+    },
+    {
+      "id": "bug-158",
+      "timestamp": "2026-08-06T19:57:50.920Z",
+      "error_message": "Incorrect value in code",
+      "file": "public/app.js",
+      "root_cause": "Had \"half\"",
+      "fix": "Changed to \"Full time\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-06T19:57:50.920Z"
+    },
+    {
+      "id": "bug-159",
+      "timestamp": "2026-08-06T20:00:00.000Z",
+      "error_message": "After ending the game the clock could be started again and the game ended multiple times",
+      "file": "public/app.js",
+      "root_cause": "atFullTime() returns false once g.endedAt is stamped, so the timer button fell back to Start and toggleTimer/nextPeriod had no guard on endedAt — Start reset g.secs to a fresh period and Period + re-ran the End the game prompt",
+      "fix": "Added gameOver() (g.endedAt) and gated toggleTimer, nextPeriod (incl. a re-check after the confirm sheet resolves), tick, canReset and the stopped-clock alarm band; renderGame now shows a disabled Final us-them button, disables Period +, and the period pill reads Full time",
+      "tags": [
+        "game-day",
+        "clock",
+        "full-time",
+        "state-guard",
+        "idempotency"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-06T20:00:00.000Z"
     }
   ]
 }

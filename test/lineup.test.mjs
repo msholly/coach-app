@@ -253,3 +253,93 @@ test("applyFormatOff: benching the keeper empties the goal", () => {
   assert.equal(Math.round(lu.gkActual[gk] * 10) / 10, 0.5);
   assert.equal(Math.round((before - lu.actual[gk]) * 10) / 10, 0.5);
 });
+
+/* ---------- redrawFrom / setFutureKeeper (extracted from app.js) ---------- */
+
+// buildGame leaves Q off — the app stamps it in buildLineup. redrawFrom reads it.
+function buildGameQ(career, opts) {
+  const lu = buildGame(career, opts);
+  lu.Q = 4; lu.N = opts.N; lu.keeper = opts.keeper;
+  return lu;
+}
+const owedFirst = (career, lu) =>
+  IDS.slice().sort((a, b) =>
+    ((career.played[a] || 0) + (lu.actual[a] || 0)) - ((career.played[b] || 0) + (lu.actual[b] || 0)));
+
+test("redrawFrom: periods already played are untouched, the future is rebuilt at the new size", () => {
+  const career = freshCareer();
+  const lu = buildGameQ(career, { N: 6, keeper: true });
+  const played0 = lu.periods[0].slice().sort();
+  const app0 = JSON.stringify(lu.app[0]);
+
+  LC.redrawFrom(lu, 0, owedFirst(career, lu), { N: 5, keeper: false, kept: career.kept, posTotals: career.posTotals });
+
+  assert.deepEqual(lu.periods[0].slice().sort(), played0, "the period on the clock is history");
+  assert.equal(JSON.stringify(lu.app[0]), app0, "its position ledger is history too");
+  assert.equal(lu.periods.length, 4);
+  assert.equal(lu.app.length, 4);
+  for (let q = 1; q < 4; q++) {
+    assert.equal(lu.periods[q].length, 5, `period ${q} is the new field size`);
+    assert.equal(lu.gk[q], null, "keeperless: nobody is in goal");
+  }
+  assert.equal(lu.N, 5);
+  assert.equal(lu.keeper, false);
+  assert.equal(lu.handEdited, true);
+});
+
+test("redrawFrom: the tally is re-struck, not double-counted", () => {
+  const career = freshCareer();
+  const lu = buildGameQ(career, { N: 6, keeper: true });
+  const sum = (o) => Object.keys(o).reduce((a, k) => a + o[k], 0);
+  assert.equal(sum(lu.actual), 24);   // 6 on the field x 4 periods
+
+  LC.redrawFrom(lu, 0, owedFirst(career, lu), { N: 5, keeper: false, kept: career.kept, posTotals: career.posTotals });
+  // period 0 keeps its 6; periods 1-3 are now 5 each
+  assert.equal(sum(lu.actual), 6 + 15);
+  assert.equal(sum(lu.gkActual), 1, "only the played period's keeper still counts");
+});
+
+test("redrawFrom twice from the same order is idempotent; the total conserves either way", () => {
+  const career = freshCareer();
+  const lu = buildGameQ(career, { N: 6, keeper: true });
+  const opts = { N: 5, keeper: false, kept: career.kept, posTotals: career.posTotals };
+  const sum = (o) => Object.keys(o).reduce((a, k) => a + o[k], 0);
+
+  // Same order in, same sheet out — the un-tally/re-tally leaves no residue.
+  const order = owedFirst(career, lu);
+  LC.redrawFrom(lu, 1, order, opts);
+  const after1 = JSON.stringify(lu.actual);
+  LC.redrawFrom(lu, 1, order, opts);
+  assert.equal(JSON.stringify(lu.actual), after1);
+
+  // Re-sorting between redraws DOES move who plays — that is the fairness sort
+  // reacting to the new ledger, not drift — but the field-periods still conserve.
+  LC.redrawFrom(lu, 1, owedFirst(career, lu), opts);
+  assert.equal(sum(lu.actual), 12 + 10, "2 played periods of 6, 2 future of 5");
+});
+
+test("setFutureKeeper: moves the plan and the projection, never the played credit", () => {
+  const lu = buildGameQ(freshCareer(), { N: 6, keeper: true });
+  const old = lu.gk[1];
+  const pick = lu.periods[1].find((id) => id !== old);
+  const actualBefore = JSON.stringify(lu.actual);
+
+  const res = LC.setFutureKeeper(lu, 1, pick);
+  assert.deepEqual(res, { out: old });
+  assert.equal(lu.gk[1], pick);
+  assert.equal(lu.gkActual[old], 0);
+  assert.equal(lu.gkActual[pick], 1);
+  assert.equal(LC.posInPeriod(lu, 1, pick), "GK");
+  assert.ok(["D", "F"].includes(LC.posInPeriod(lu, 1, old)), "the old keeper takes the new one's spot");
+  assert.equal(JSON.stringify(lu.actual), actualBefore, "a future period moves no played time");
+});
+
+test("setFutureKeeper: refuses a player who isn't on the field that period, or is already in goal", () => {
+  const lu = buildGameQ(freshCareer(), { N: 6, keeper: true });
+  const bench = IDS.find((id) => !lu.periods[1].includes(id));
+  assert.equal(LC.setFutureKeeper(lu, 1, bench), false);
+  assert.equal(LC.setFutureKeeper(lu, 1, lu.gk[1]), false);
+  assert.equal(LC.setFutureKeeper(lu, 1, null), false);
+  lu.keeper = false;
+  assert.equal(LC.setFutureKeeper(lu, 1, lu.periods[1][0]), false, "keeperless: there is no goal to give");
+});

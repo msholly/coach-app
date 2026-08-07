@@ -2,10 +2,10 @@
 // ponytail: stale-while-revalidate — cached shell renders instantly, the update
 // is fetched in the background and lands on the *next* launch. /api/* never
 // touches this cache; sync stays network-only and authoritative.
-const CACHE = "sideline-shell-v9";
+const CACHE = "sideline-shell-v15";
 // Every file the app needs to render offline. Adding a new <link>/<script> to
 // index.html means adding it here too, or the cold offline launch breaks.
-const SHELL = ["/", "/app.css", "/app.js", "/lineup-core.js", "/drills.js", "/diagram.js", "/icon.png", "/manifest.webmanifest"];
+const SHELL = ["/", "/app.css", "/app.js", "/lineup-core.js", "/state.js", "/stats.js", "/outbox.js", "/drills.js", "/diagram.js", "/icon.png", "/manifest.webmanifest"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(

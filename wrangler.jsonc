@@ -29,6 +29,14 @@
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GameClock"] }],
 
+  // Brute-force guard on POST /api/team/:id/auth only. Keyed on the team id,
+  // so a guesser cannot spread attempts over many IPs. The worker treats a
+  // missing binding as "no limit", which is what happens under older wrangler
+  // dev builds — the login still works locally, it just isn't throttled.
+  "ratelimits": [
+    { "name": "LOGIN_LIMIT", "namespace_id": "1001", "simple": { "limit": 10, "period": 60 } }
+  ],
+
   "observability": { "enabled": true }
 
   // To serve at coach.mitchellsholly.com:

@@ -18,7 +18,14 @@ const redact = (s) => String(s == null ? "" : s).replace(SECRETISH, "$1[redacted
 const json = (obj, status = 200, extra = {}) =>
   new Response(JSON.stringify(obj), {
     status,
-    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...extra },
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store",
+      // Static assets get their headers from public/_headers; API responses are
+      // minted here, so the sniffing guard has to be set here too.
+      "x-content-type-options": "nosniff",
+      ...extra,
+    },
   });
 
 export default {
@@ -45,6 +52,8 @@ export default {
         // Resolve the D1 binding from wrangler.jsonc — supports the auto-generated
         // "coach_sideline_db" name as well as the template default "DB".
         const db = env.coach_sideline_db || env.DB;
+        const denied = await gate(db, id, request);
+        if (denied) return denied;
         if (request.method === "GET") return getTeam(db, id);
         if (request.method === "PUT") return putTeam(db, id, request, url);
         return json({ error: "method_not_allowed" }, 405, { allow: "GET, PUT" });
@@ -52,12 +61,22 @@ export default {
 
       // /api/team/:id/(games|events|appearances|positions)[/:gid] — the
       // append-only archive beside the live doc. Same ID_RE trust boundary.
-      const m2 = path.match(/^\/api\/team\/([^/]+)\/(games|events|appearances|positions|stats|push|alarm|schedule)(?:\/([^/]+))?$/);
+      const m2 = path.match(/^\/api\/team\/([^/]+)\/(games|events|appearances|positions|stats|push|alarm|schedule|auth)(?:\/([^/]+))?$/);
       if (m2) {
         const id = decodeURIComponent(m2[1]);
         if (!ID_RE.test(id)) return json({ error: "bad_team_id" }, 400);
         const db = env.coach_sideline_db || env.DB;
         const kind = m2[2], sub = m2[3] ? decodeURIComponent(m2[3]) : null;
+
+        // /auth is the way IN, so it cannot sit behind the gate.
+        if (kind === "auth" && !sub) {
+          if (request.method === "GET") return authStatus(db, id, request);
+          if (request.method === "POST") return postAuth(env, db, id, request);
+          return json({ error: "method_not_allowed" }, 405, { allow: "GET, POST" });
+        }
+        const denied = await gate(db, id, request);
+        if (denied) return denied;
+
         if (kind === "games" && !sub && request.method === "POST") return postGame(db, id, request);
         if (kind === "games" && !sub && request.method === "GET") return listGames(db, id, url);
         if (kind === "games" && sub && request.method === "GET") return getGameEvents(db, id, sub);
@@ -137,6 +156,158 @@ async function putTeam(db, id, request, url) {
     .run();
 
   return json({ id, rev: newRev, updatedAt: now });
+}
+
+/* ========================= login (team passphrase) =========================
+   The token in the share link is a capability: whoever holds the link holds the
+   team. That is right for a link texted to two assistant coaches and wrong the
+   moment it leaks, so a team can add a passphrase and become two things — the
+   link AND the phrase.
+
+   Shaped for what this app actually is: ONE shared passphrase per team, no
+   accounts, no email, no reset flow (there is no address to send one to). A
+   passphrase is opt-in; a team without one behaves exactly as it did before.
+   A coach who forgets theirs still has every byte of the team in localStorage
+   on their own phone, and recovery is a one-line D1 UPDATE (see migrations/0002).
+
+   ponytail: the session cookie is signed with the team's own pass_hash, so
+   there is no session secret to generate, store or rotate — and changing the
+   passphrase invalidates every outstanding session on every device for free.
+   b64uEncode/b64uDecode are the VAPID helpers further down this file. */
+
+const SESSION_MS = 30 * 24 * 3600 * 1000;   // a coach re-enters it about once a month
+const MIN_PASS = 6, MAX_PASS = 200;
+// Workers Free allows 10 ms of CPU per request, and PBKDF2-SHA256 measures
+// ~0.5 ms per 1000 iterations — so the usual 100k advice would blow the whole
+// budget on every login. The count is stored INSIDE the hash, so raising it on
+// a paid plan costs nothing: existing hashes keep verifying at their own count.
+const PBKDF2_ITERS = 10000;
+const te = new TextEncoder();
+
+const sessionName = (id) => "cs_" + id;   // per-team: one device can hold several
+const cookieAttrs = "Path=/api; HttpOnly; Secure; SameSite=Strict";
+
+function cookieVal(request, name) {
+  const raw = request.headers.get("cookie") || "";
+  for (const part of raw.split(";")) {
+    const i = part.indexOf("=");
+    if (i > 0 && part.slice(0, i).trim() === name) return part.slice(i + 1).trim();
+  }
+  return null;
+}
+
+// Compare in constant time: a byte-at-a-time early exit leaks the expected
+// value one guess per byte.
+function sameBytes(a, b) {
+  if (a.length !== b.length) return false;
+  let d = 0;
+  for (let i = 0; i < a.length; i++) d |= a[i] ^ b[i];
+  return d === 0;
+}
+
+async function pbkdf2(pass, salt, iters) {
+  const key = await crypto.subtle.importKey("raw", te.encode(pass), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations: iters }, key, 256);
+  return new Uint8Array(bits);
+}
+
+async function hashPass(pass) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  return `pbkdf2$${PBKDF2_ITERS}$${b64uEncode(salt)}$${b64uEncode(await pbkdf2(pass, salt, PBKDF2_ITERS))}`;
+}
+
+async function verifyPass(pass, stored) {
+  const p = String(stored || "").split("$");
+  if (p.length !== 4 || p[0] !== "pbkdf2") return false;
+  const iters = +p[1];
+  if (!Number.isInteger(iters) || iters < 1000 || iters > 600000) return false;
+  return sameBytes(await pbkdf2(pass, b64uDecode(p[2]), iters), b64uDecode(p[3]));
+}
+
+async function signSession(passHash, id, exp) {
+  const key = await crypto.subtle.importKey("raw", te.encode(passHash), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return exp + "." + b64uEncode(await crypto.subtle.sign("HMAC", key, te.encode(id + "." + exp)));
+}
+
+async function sessionCookie(passHash, id) {
+  const exp = Date.now() + SESSION_MS;
+  return `${sessionName(id)}=${await signSession(passHash, id, exp)}; Max-Age=${Math.floor(SESSION_MS / 1000)}; ${cookieAttrs}`;
+}
+const clearCookie = (id) => `${sessionName(id)}=; Max-Age=0; ${cookieAttrs}`;
+
+async function validSession(passHash, id, val) {
+  const m = /^(\d{10,16})\.([A-Za-z0-9_-]{20,})$/.exec(String(val || ""));
+  if (!m || +m[1] <= Date.now()) return false;
+  return sameBytes(te.encode(await signSession(passHash, id, +m[1])), te.encode(val));
+}
+
+// Every /api/team/:id* route runs through this. Returns a Response to send
+// instead of the handler, or null to carry on. One extra PK lookup per API
+// call — the price of the doc and the lock living in the same row.
+async function gate(db, id, request) {
+  const row = await db.prepare("SELECT pass_hash FROM teams WHERE id = ?").bind(id).first();
+  // No row yet (a team's first write) or no passphrase set: the link is the gate,
+  // exactly as before. Locking is opt-in — nobody's existing link stops working.
+  if (!row || !row.pass_hash) return null;
+  if (await validSession(row.pass_hash, id, cookieVal(request, sessionName(id)))) return null;
+  return json({ error: "locked" }, 401);
+}
+
+// GET /api/team/:id/auth — what the client needs before it decides to prompt.
+async function authStatus(db, id, request) {
+  const row = await db.prepare("SELECT pass_hash FROM teams WHERE id = ?").bind(id).first();
+  const hash = row && row.pass_hash;
+  if (!hash) return json({ exists: !!row, locked: false, authed: true });
+  return json({ exists: true, locked: true, authed: await validSession(hash, id, cookieVal(request, sessionName(id))) });
+}
+
+// POST /api/team/:id/auth
+//   { pass }               log in
+//   { newPass }            set or change the passphrase (see below for who may)
+//   { pass, newPass }      change it from a device with no live session
+//   { newPass: null }      remove it, unlocking the team
+async function postAuth(env, db, id, request) {
+  let b;
+  try { b = await request.json(); } catch { return json({ error: "invalid_json_body" }, 400); }
+
+  // Rate limit BEFORE any PBKDF2 work: unlimited guesses are both the
+  // brute-force path and a way to burn the Worker's CPU budget. Keyed on the
+  // team rather than the caller's IP because a distributed guesser just rotates
+  // IPs; the cost of the stricter key is that a team under attack can't log in
+  // for a minute, and the app stays fully usable offline meanwhile.
+  if (env.LOGIN_LIMIT) {
+    const { success } = await env.LOGIN_LIMIT.limit({ key: id });
+    if (!success) return json({ error: "too_many_attempts" }, 429, { "retry-after": "60" });
+  }
+
+  const row = await db.prepare("SELECT pass_hash FROM teams WHERE id = ?").bind(id).first();
+  if (!row) return json({ error: "not_found" }, 404);
+  const cur = row.pass_hash || null;
+  // Phones autocapitalise and autocomplete into this field; a trailing space
+  // that locks a coach out of their own team is not a security win.
+  const pass = typeof b.pass === "string" ? b.pass.trim() : "";
+
+  // Session first — it is an HMAC, where verifyPass is the expensive KDF, so a
+  // logged-in device changing its passphrase pays for one derivation, not two.
+  // On an unlocked team, holding the link IS the credential: that is what lets
+  // the first passphrase be set at all.
+  const authed = !cur || (await validSession(cur, id, cookieVal(request, sessionName(id)))) || (!!pass && await verifyPass(pass, cur));
+  if (!authed) return json({ error: "bad_passphrase" }, 401);
+
+  if ("newPass" in b) {
+    if (b.newPass === null) {
+      await db.prepare("UPDATE teams SET pass_hash = NULL WHERE id = ?").bind(id).run();
+      return json({ locked: false, authed: true }, 200, { "set-cookie": clearCookie(id) });
+    }
+    const np = typeof b.newPass === "string" ? b.newPass.trim() : "";
+    if (np.length < MIN_PASS || np.length > MAX_PASS) return json({ error: "bad_passphrase_length", min: MIN_PASS, max: MAX_PASS }, 400);
+    const hash = await hashPass(np);
+    await db.prepare("UPDATE teams SET pass_hash = ? WHERE id = ?").bind(hash, id).run();
+    return json({ locked: true, authed: true }, 200, { "set-cookie": await sessionCookie(hash, id) });
+  }
+
+  if (!cur) return json({ locked: false, authed: true });
+  return json({ locked: true, authed: true }, 200, { "set-cookie": await sessionCookie(cur, id) });
 }
 
 /* ---------- append-only archive (games / events / appearances) ----------
@@ -278,6 +449,8 @@ async function getStats(db, teamId, url) {
 // Requirement 3 collapses to this one query, scoped to team AND season.
 // ?exclude= keeps the in-progress game out — the client holds its periods
 // locally and would otherwise double-count them.
+// ?byGame=1 additionally returns the same sums split by game — the player card's
+// "game over game" list. Same one query shape, one extra GROUP BY column.
 async function getPositions(db, teamId, url) {
   const season = url.searchParams.get("season") || "";
   const exclude = url.searchParams.get("exclude") || "";
@@ -286,7 +459,16 @@ async function getPositions(db, teamId, url) {
     "WHERE game_id IN (SELECT id FROM games WHERE team_id = ? AND season = ?) AND game_id <> ? " +
     "GROUP BY player_id, pos"
   ).bind(teamId, season, exclude).all();
-  return json({ positions: rs.results || [] });
+  const out = { positions: rs.results || [] };
+  if (url.searchParams.get("byGame")) {
+    const bg = await db.prepare(
+      "SELECT game_id, player_id, pos, ROUND(SUM(frac), 1) AS periods FROM appearances " +
+      "WHERE game_id IN (SELECT id FROM games WHERE team_id = ? AND season = ?) AND game_id <> ? " +
+      "GROUP BY game_id, player_id, pos"
+    ).bind(teamId, season, exclude).all();
+    out.byGame = bg.results || [];
+  }
+  return json(out);
 }
 
 /* ==================== GameChanger schedule (read-only) ====================

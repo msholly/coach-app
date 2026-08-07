@@ -4,6 +4,10 @@ import worker, { parseIcsEvents } from "../src/worker.js";
 
 const TEAM = "abc123def456";
 const req = (path) => new Request("http://t" + path);
+// The auth gate runs before every archive route, schedule included. No team
+// row means no passphrase means the link is the gate — exactly the pre-lock
+// behaviour these tests were written against.
+const noTeamDb = { prepare: () => ({ bind: () => ({ first: async () => null }) }) };
 
 // Shaped on the real GameChanger feed (PRODID -//com.gc/NONSGML GameChanger).
 const ics = (events) =>
@@ -73,7 +77,7 @@ test("ICS decoding: escapes, folded lines, UTC stamps, ordering", () => {
 });
 
 test("schedule route: 501 when the secret is absent, and the token never leaks", async () => {
-  let r = await worker.fetch(req(`/api/team/${TEAM}/schedule`), {});
+  let r = await worker.fetch(req(`/api/team/${TEAM}/schedule`), { coach_sideline_db: noTeamDb });
   assert.equal(r.status, 501);
   let body = await r.text();
   assert.match(body, /schedule_unavailable/);
@@ -84,7 +88,7 @@ test("schedule route: 501 when the secret is absent, and the token never leaks",
   const realFetch = globalThis.fetch;
   globalThis.fetch = async () => { throw new Error("connect ECONNREFUSED " + URL_WITH_TOKEN); };
   try {
-    r = await worker.fetch(req(`/api/team/${TEAM}/schedule`), { GC_ICS_URL: URL_WITH_TOKEN });
+    r = await worker.fetch(req(`/api/team/${TEAM}/schedule`), { coach_sideline_db: noTeamDb, GC_ICS_URL: URL_WITH_TOKEN });
     body = await r.text();
   } finally {
     globalThis.fetch = realFetch;
@@ -100,7 +104,7 @@ test("schedule route: webcal:// is rewritten, non-https refused, non-calendar re
   globalThis.fetch = async (u) => { asked = u; return new Response(ics([vevent("Fall 2026 BU8 vs Rangers")]), { status: 200 }); };
   try {
     const r = await worker.fetch(req(`/api/team/${TEAM}/schedule`),
-      { GC_ICS_URL: "webcal://api.team-manager.gc.com/x.ics?token=abc" });
+      { coach_sideline_db: noTeamDb, GC_ICS_URL: "webcal://api.team-manager.gc.com/x.ics?token=abc" });
     const b = await r.json();
     assert.equal(r.status, 200);
     assert.match(asked, /^https:\/\//, "webcal:// must be rewritten — fetch() cannot use that scheme");
@@ -110,12 +114,12 @@ test("schedule route: webcal:// is rewritten, non-https refused, non-calendar re
       "a coach's schedule must never land in a shared cache");
 
     // an http:// or file:// secret is a misconfiguration, not something to fetch
-    const bad = await worker.fetch(req(`/api/team/${TEAM}/schedule`), { GC_ICS_URL: "http://example.com/x.ics" });
+    const bad = await worker.fetch(req(`/api/team/${TEAM}/schedule`), { coach_sideline_db: noTeamDb, GC_ICS_URL: "http://example.com/x.ics" });
     assert.equal(bad.status, 500);
 
     // an HTML error page from GC must not be parsed as a calendar
     globalThis.fetch = async () => new Response("<html>login</html>", { status: 200 });
-    const notCal = await worker.fetch(req(`/api/team/${TEAM}/schedule`), { GC_ICS_URL: "https://x/y.ics" });
+    const notCal = await worker.fetch(req(`/api/team/${TEAM}/schedule`), { coach_sideline_db: noTeamDb, GC_ICS_URL: "https://x/y.ics" });
     assert.equal(notCal.status, 502);
     assert.match(await notCal.text(), /schedule_not_calendar/);
   } finally {

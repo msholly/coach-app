@@ -8,7 +8,8 @@ CREATE TABLE IF NOT EXISTS teams (
   doc         TEXT    NOT NULL,             -- JSON app state
   rev         INTEGER NOT NULL DEFAULT 1,
   updated_at  INTEGER NOT NULL,             -- ms since epoch, server-stamped on write
-  created_at  INTEGER NOT NULL
+  created_at  INTEGER NOT NULL,
+  pass_hash   TEXT                          -- pbkdf2$iters$salt$hash; NULL = link is the only gate
 );
 
 -- Append-only archive beside the live doc. The doc stays the only thing game

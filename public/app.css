@@ -182,8 +182,9 @@
 
   /* ---------- panels / cards ---------- */
   main{margin-top:0}
-  .panel{display:none; animation:fade .25s ease}
+  .panel{display:none; animation:fade .25s ease; padding-top:14px}
   .panel.active{display:block}
+  #p-game{padding-top:0} /* ponytail: Game Day has its own sticky clock band up top */
   @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
   @media (prefers-reduced-motion:reduce){.panel{animation:none}}
 
@@ -221,6 +222,8 @@
     transition:filter .15s,transform .05s;
   }
   button.btn:hover{filter:brightness(1.06)}
+  /* full time disables the clock and Period + — they must not read as tappable */
+  button[disabled]{opacity:.45;cursor:default;pointer-events:none}
   button.btn:active{transform:translateY(1px)}
   button.btn.ghost{background:transparent; color:var(--accent-deep); border-color:var(--line)}
   :root[data-theme="dark"] button.btn.ghost{color:var(--accent)}
@@ -496,39 +499,65 @@
   .btn-text{appearance:none;border:0;background:none;cursor:pointer;font-family:inherit;color:#9aa79a;font-size:12px;font-weight:600;padding:4px 2px}
   .btn-text:hover{color:#eef2e8}
 
-  /* On the field — ink panel, paper chips, position rails. */
-  .field-mini{position:relative;background:#0d100b;border-radius:14px;padding:14px;color:#fff}
+  /* On the field — ink panel, paper chips, position rails (8b). */
+  .field-mini{position:relative;background:#0d100b;border-radius:14px;padding:14px;color:#fff;display:flex;flex-direction:column;gap:9px}
   /* layout only — the display face lives on #fmTitle so the inline hint beside
      it can stay in the body font without restating the stack */
-  .field-mini h3{font-size:14px;margin:0 0 8px;display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+  .field-mini h3{font-size:14px;margin:0;display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
   #fmTitle{font-family:"Bahnschrift","Oswald","Arial Narrow",system-ui,sans-serif;text-transform:uppercase;letter-spacing:.06em;flex:0 0 auto}
-  /* The 1/2-column toggle was removed from the markup; the 2-col layout itself
-     (.onfield.cols2 + chip2() + setCols()) is kept, so re-adding the control is
-     just putting the .colseg span back in the h3. */
-  .colseg{display:flex;background:rgba(255,255,255,.09);border-radius:8px;padding:2px}
-  .colseg button{appearance:none;font-family:inherit;border:0;cursor:pointer;border-radius:6px;min-height:26px;padding:0 11px;font-size:11px;font-weight:700;background:transparent;color:#c8d2c4}
-  .colseg button[aria-pressed="true"]{background:var(--paper);color:#14180f}
   /* Secondary info riding on the section title, not a line of its own. */
   .fm-hint{flex:1 1 180px;min-width:0;font-size:11.5px;line-height:1.3;color:#9fb09b;font-weight:400;text-align:right}
   .fm-hint.armed{color:#8ef0b1;font-weight:600}
+  /* "1.4p played · 2.6p left" — rewritten at 1 Hz by updateFieldLive. */
+  .fm-prog{flex:0 0 auto;font:400 11px ui-monospace,Menlo,monospace;color:#8ef0b1}
 
-  .posrow{display:flex;gap:9px;align-items:stretch;margin-bottom:8px}
-  .posrow .rail{flex:0 0 auto;width:30px;display:grid;place-items:center;border-radius:8px;font-family:"Bahnschrift",system-ui,sans-serif;font-size:13px;font-weight:800}
+  .onfield{display:flex;flex-direction:column;gap:9px}
+  .posrow{display:flex;gap:9px;align-items:stretch}
+  .posrow .rail{flex:0 0 auto;width:28px;display:grid;place-items:center;border-radius:8px;font-family:"Bahnschrift",system-ui,sans-serif;font-size:13px;font-weight:800}
   .rail.gk{background:var(--cone);color:#fff;font-size:11px}
   .rail.d{background:#2f7d4f;color:#fff}
   .rail.f{background:#c78a1e;color:#14100a}
   .posrow .stack{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:7px}
 
-  /* Paper chip: name, season D/F needle, periods played this game. */
-  .jchip{position:relative;appearance:none;cursor:pointer;font-family:inherit;background:var(--paper);color:#14180f;border:0;border-radius:10px;padding:8px 12px;min-height:50px;font-size:16px;font-weight:700;display:flex;align-items:center;gap:12px;width:100%;text-align:left}
+  /* Paper chip: season D/F strip, name row (verdict, just-on), interval track. */
+  .jchip{position:relative;appearance:none;cursor:pointer;font-family:inherit;background:var(--paper);color:#14180f;border:0;border-radius:10px;padding:7px 11px 7px 9px;min-height:52px;font-size:15.5px;font-weight:700;display:flex;align-items:center;gap:9px;width:100%;text-align:left;overflow:hidden;box-sizing:border-box}
   /* Direct sunlight kills hue and low-contrast rings; the only reliable signal
      on a washed-out screen is a luminance flip. A selected on-field player
      inverts to ink-on-cone with a dark ring — readable at arm's length in sun. */
   .jchip.sel{background:var(--cone);color:#fff;box-shadow:inset 0 0 0 3px #14180f,0 0 0 3px var(--cone)}
-  .jchip.sel .pp,.jchip.sel .pl,.jchip.sel .ndl b{color:rgba(255,255,255,.92)}
-  .jchip.sel .ndl .track i{background:rgba(255,255,255,.45)}
-  .jchip.sel .ndl .track i.mark,.jchip.sel .pp .half{background:#fff}
+  .jchip.sel .verdict.met,.jchip.sel .verdict.spare{color:rgba(255,255,255,.92)}
   .jchip .nm{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  /* Season D/F strip: F share over D share, season periods from the archive. */
+  .dfstrip{flex:0 0 auto;width:6px;height:30px;border-radius:3px;overflow:hidden;display:flex;flex-direction:column;background:rgba(20,24,15,.12)}
+  .dfstrip i{width:100%;flex:0 0 auto}
+  .dfstrip .f{background:#c78a1e}
+  .dfstrip .d{background:#2f7d4f}
+
+  .jchip .jbody{display:flex;flex-direction:column;gap:5px;flex:1 1 auto;min-width:0}
+  .jchip .jname{display:flex;gap:6px;align-items:center;min-width:0}
+  .jchip .jlive{display:flex;gap:6px;align-items:center;flex:0 0 auto}
+  .badge-juston{font:800 9px system-ui,sans-serif;letter-spacing:.07em;text-transform:uppercase;background:#14180f;color:#f4f2ea;border-radius:4px;padding:3px 5px;flex:0 0 auto}
+  /* The verdict: the 3-of-4 arithmetic stated in words. Cone appears on a chip
+     ONLY for the short pill — one meaning per colour. */
+  .verdict{flex:0 0 auto;white-space:nowrap}
+  .verdict.met{font:800 11px system-ui,sans-serif;color:#245f3d}
+  .verdict.spare{font:700 11px ui-monospace,Menlo,monospace;color:#3f4a3e}
+  .verdict.on{font:800 10px system-ui,sans-serif;letter-spacing:.03em;text-transform:uppercase;background:#14180f;color:#f4f2ea;border-radius:4px;padding:4px 6px}
+  .verdict.short{font:800 10px ui-monospace,Menlo,monospace;color:#fff;background:#a3420f;border-radius:4px;padding:4px 6px}
+
+  /* Four-segment track: dark = played (where it happened), flat grey = elapsed
+     while they sat, stripes = hasn't happened yet. Notch = the minimum. */
+  .jchip .track{display:flex;gap:3px;height:12px;position:relative}
+  .jchip .seg{position:relative;flex:1 1 0;height:12px;border-radius:3px;overflow:hidden}
+  .jchip .seg.past{background:rgba(20,24,15,.30)}
+  .jchip .seg.live{background:rgba(20,24,15,.06)}
+  .jchip .seg.fut{background:repeating-linear-gradient(135deg,rgba(20,24,15,.32) 0 3px,rgba(20,24,15,.10) 3px 6px)}
+  .jchip .seg i{position:absolute;top:0;bottom:0}
+  .jchip .seg i.el{left:0;background:rgba(20,24,15,.26)}
+  .jchip .seg i.fut{right:0;background:repeating-linear-gradient(135deg,rgba(20,24,15,.32) 0 3px,rgba(20,24,15,.10) 3px 6px)}
+  .jchip .seg i.iv{background:#14180f}
+  .jchip .track .notch{position:absolute;top:-4px;bottom:-4px;width:2px;background:#14180f}
 
   /* 1-col only: goal/shot-on-goal loggers ride alongside the chip, not inside
      it — a jchip is itself a tap target (sub/swap), so these can't nest in it. */
@@ -540,34 +569,8 @@
     align-items:center;justify-content:center;font-size:14px;line-height:1.3;gap:1px}
   .statbtn b{font-size:10px;font-weight:800}
   .statbtn:active{background:var(--paper);color:#14180f}
-  .dot-off{width:9px;height:9px;border-radius:50%;background:var(--cone);flex:0 0 auto}
-  /* coming ON is green — the field's cone dot means the opposite (coming off) */
-  .dot-on{width:9px;height:9px;border-radius:50%;background:var(--accent);flex:0 0 auto}
-  .jchip.bench .dot-on{box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 28%,transparent)}
-  .ndl{display:flex;align-items:center;gap:4px;width:78px;flex:0 0 auto}
-  .ndl b{font-family:"Bahnschrift",system-ui,sans-serif;font-size:9px;font-weight:700}
-  .ndl b.d{color:#2f7d4f}
-  .ndl b.f{color:#a3720f}
-  .ndl .track{flex:1 1 auto;display:flex;align-items:center;gap:2px;height:9px}
-  .ndl .track i{flex:1 1 0;height:2px;background:rgba(20,24,15,.2);border-radius:2px}
-  .ndl .track i.mark{height:9px;background:#14180f}
-  /* Periods over minutes, both for THIS game. Fixed width so the chips' right
-     edge stays a straight line whatever the numbers are. */
-  .pp{font:600 11px ui-monospace,Menlo,monospace;color:#4b544a;flex:0 0 auto;width:46px;
-    display:inline-flex;align-items:center;justify-content:flex-end;gap:4px}
-  .pp b{font-weight:700}
-  .pp i{font-style:normal;font-size:10px;opacity:.72}
-  .pp .half{width:8px;height:8px;border-radius:50%;background:linear-gradient(90deg,#4b544a 50%,rgba(75,84,74,.25) 50%);flex:0 0 auto}
 
-  /* 2-col variant: rail attaches to the chip's left edge. */
-  .onfield.cols2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-  .onfield.cols2 .jchip{padding:0 10px 0 0;min-height:54px;gap:9px;overflow:hidden}
-  .onfield.cols2 .jchip .rail{width:30px;align-self:stretch;display:grid;place-items:center;border-radius:0;flex:0 0 auto;font-family:"Bahnschrift",system-ui,sans-serif;font-size:13px;font-weight:800}
-  .onfield.cols2 .jchip .col{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px;padding:6px 0}
-  .onfield.cols2 .jchip .pl{display:flex;align-items:center;gap:5px;font:600 10.5px ui-monospace,Menlo,monospace;color:#4b544a}
-  .onfield.cols2 .dot-off{width:7px;height:7px}
-
-  .subline{font-size:12.5px;display:flex;flex-direction:column;gap:7px;padding-top:11px}
+  .subline{font-size:12.5px;display:flex;flex-direction:column;gap:7px;padding-top:2px}
   .subline .why{font-size:11.5px;line-height:1.45;color:#c8d2c4}
   /* Ranked swap candidates: off ⟶ on, most-owed first. */
   .sph{font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:#c8d2c4;font-weight:700}
@@ -606,34 +609,16 @@
   .nk-pick .kchip.capped .lb{color:inherit}
   .nk-note{font-size:11px;line-height:1.4;color:#c8d2c4}
 
-  /* Bench — least playing time first, full-width rows. It sits INSIDE the dark
-     field panel (above the sub list), so it needs the panel's palette: on the
-     page background its --surface-2 chips read as black-on-black. */
-  .field-mini .bench-note{margin-top:11px;padding-top:11px;border-top:1px solid rgba(255,255,255,.16);color:#c8d2c4}
-  /* title + its helper share one line, the helper as secondary info */
-  .field-mini .bench-note .bh{color:#fff}
-  .field-mini .bench-note .bhrow{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
-  .field-mini .bench-note .bhrow .rec{margin:0;flex:1 1 160px;min-width:0;color:#9fb09b;font-size:11.5px;text-align:right}
-  .field-mini .jchip.bench{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.22);color:#fff}
-  .field-mini .jchip.bench.sel{box-shadow:0 0 0 3px #8ef0b1;border-color:#8ef0b1}
-  .field-mini .jchip.bench .ndl b.d{color:#8ef0b1}
-  .field-mini .jchip.bench .ndl b.f{color:#e6b455}
-  .field-mini .jchip.bench .ndl .track i{background:rgba(255,255,255,.22)}
-  .field-mini .jchip.bench .ndl .track i.mark{background:#fff}
-  .field-mini .jchip.bench .pp{color:#c8d2c4}
-  .field-mini .jchip.bench .pp .half{background:linear-gradient(90deg,#c8d2c4 50%,rgba(200,210,196,.3) 50%)}
-  .bench-note{margin-top:16px;font-size:12px;color:var(--muted)}
-  .bench-note .bh{font-weight:700;color:var(--ink)}
-  .bench-note .rec{margin-top:5px}
-  .benchchips{display:flex;flex-direction:column;gap:8px;margin-top:8px}
-  .jchip.bench{background:var(--surface-2);border:1px solid var(--line);color:var(--ink);padding:0 12px;gap:10px}
-  .jchip.bench.sel{box-shadow:0 0 0 3px var(--accent);border-color:var(--accent)}
-  .jchip.bench .ndl b.d{color:var(--accent)}
-  .jchip.bench .ndl b.f{color:var(--amber)}
-  .jchip.bench .ndl .track i{background:var(--line)}
-  .jchip.bench .ndl .track i.mark{background:var(--ink)}
-  .jchip.bench .pp{color:var(--muted)}
-  .jchip.bench .pp .half{background:linear-gradient(90deg,var(--muted) 50%,var(--line) 50%)}
+  /* Bench — least playing time first, full-width rows INSIDE the dark panel.
+     Same chip anatomy as the field, dimmed paper — never inverted: a bench
+     selection rings green, only a field selection flips to cone. */
+  .field-mini .bench-note{padding-top:10px;border-top:1px solid rgba(255,255,255,.16);color:#c8d2c4;font-size:12px;display:flex;flex-direction:column;gap:7px}
+  .field-mini .bench-note .bh{color:#fff;font:800 10.5px "Bahnschrift",system-ui,sans-serif;letter-spacing:.08em;text-transform:uppercase}
+  .field-mini .bench-note .bhrow{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap}
+  .field-mini .bench-note .bkey{font-weight:400;font-size:11.5px;color:#8ef0b1}
+  .benchchips{display:flex;flex-direction:column;gap:7px}
+  .field-mini .jchip.bench{background:#c6c3b4;color:#14180f;min-height:50px}
+  .field-mini .jchip.bench.sel{background:#c6c3b4;color:#14180f;box-shadow:0 0 0 3px #8ef0b1}
 
   .nudge{margin-top:16px;font-size:13px;font-weight:700;color:#14100a;background:var(--cone);border:0;border-radius:10px;padding:11px 13px}
 
@@ -683,6 +668,123 @@
   dialog.sheet .steps .pair button{flex:1;min-height:48px;appearance:none;font-family:inherit;font-size:20px;border-radius:10px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);cursor:pointer}
   dialog.sheet .btns{display:flex;gap:8px;margin-top:14px}
   dialog.sheet .btns .btn{min-height:48px;flex:1;justify-content:center}
+
+  /* ---------- player card ----------
+     One sheet for the design's 1a/1b/1c. It is taller and wider than the
+     confirm sheets, scrolls its body, and pins the action bar — the phone-sized
+     box IS the "full screen" framing once it fills a 390px viewport. */
+  /* display MUST be scoped to [open]: an author `display` on a <dialog> beats the
+     UA's `dialog:not([open]){display:none}`, and the closed sheet then renders
+     in flow at the foot of the page. Same family of bug as the `hidden`
+     attribute losing to `.clock-band{display:flex}`. */
+  dialog.sheet.cardsheet{
+    width:min(94vw,420px); max-height:min(88vh,780px); padding:0; overflow:hidden;
+  }
+  dialog.sheet.cardsheet[open]{display:flex; flex-direction:column}
+  .cardsheet .chead{
+    position:relative; flex:0 0 auto; padding:16px 16px 12px;
+    border-bottom:1px solid var(--line); background:var(--surface-2);
+  }
+  .cardsheet .ctitle{display:flex;align-items:baseline;gap:9px}
+  .cardsheet .ctitle .nm{
+    font-family:"Bahnschrift","Oswald","Arial Narrow",system-ui,sans-serif;
+    font-size:27px; font-weight:600; letter-spacing:-.01em; line-height:1;
+  }
+  .cardsheet .cnum{
+    appearance:none;font-family:ui-monospace,Menlo,monospace;font-weight:700;font-size:14px;
+    background:none;border:0;padding:2px 4px;color:var(--muted);cursor:pointer;border-radius:5px;
+  }
+  .cardsheet .cnum:hover{background:var(--surface);color:var(--ink)}
+  .cardsheet .chead.out .ctitle .nm,.cardsheet .chead.out .cnum{color:var(--muted)}
+  .cardsheet .csub{font-size:12.5px;color:var(--muted);margin-top:5px}
+  .cardsheet .cpills{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+  .cpill{
+    font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;line-height:1;
+    border-radius:5px;padding:6px 8px;border:1px solid var(--line);background:var(--surface);color:var(--muted);
+  }
+  .cpill.go{background:var(--accent-soft);color:var(--accent-deep);border-color:var(--accent)}
+  .cpill.warn{background:var(--cone-soft);color:var(--cone);border-color:var(--cone)}
+  .cardsheet .cclose{
+    position:absolute;top:12px;right:12px;width:34px;height:34px;border-radius:9px;
+    border:1px solid var(--line);background:var(--surface);color:var(--muted);
+    font-size:18px;line-height:1;cursor:pointer;appearance:none;font-family:inherit;
+  }
+  .cardsheet .cbody{flex:1 1 auto;min-height:0;overflow-y:auto;padding:14px 16px 18px;display:flex;flex-direction:column;gap:18px}
+  .cardsheet .cblk{display:flex;flex-direction:column;gap:9px}
+  .cardsheet .chd{
+    display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+    font-family:"Bahnschrift","Oswald","Arial Narrow",system-ui,sans-serif;
+    font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
+  }
+  .cardsheet .chd .w{font:400 11px ui-monospace,Menlo,monospace;letter-spacing:0;text-transform:none;color:var(--muted)}
+
+  /* the period bar: one cell per period, filled by the share actually played,
+     with a notch at the guide's minimum */
+  .cbars{display:flex;gap:3px;height:16px;position:relative}
+  .cbar{flex:1 1 0;height:16px;border-radius:3px;overflow:hidden;background:var(--chalk);opacity:.45}
+  .cbar.done,.cbar.live{opacity:1}
+  .cbar i{display:block;height:100%;background:var(--ink)}
+  .cbar.live i{background:var(--accent)}
+  .cbar.plan i{background:var(--muted)}
+  .cnotch{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--cone);transform:translateX(-1px)}
+  .cbarlabs{display:flex;gap:3px;font:600 9.5px ui-monospace,Menlo,monospace;color:var(--muted)}
+  .cbarlabs span{flex:1 1 0}
+  .cardsheet .cnote{margin:0;font-size:13px;line-height:1.55;color:var(--ink)}
+  .cardsheet .cnote .ok{color:var(--accent-deep)}
+  .cardsheet .cnote .bad{color:var(--cone)}
+
+  .ctiles{display:flex;gap:7px}
+  .ctile{flex:1 1 0;min-width:0;background:var(--surface-2);border:1px solid var(--line);border-radius:9px;
+    padding:8px 9px;display:flex;flex-direction:column;gap:2px}
+  .ctile b{font:700 19px/1 ui-monospace,Menlo,monospace;color:var(--ink)}
+  .ctile b.gk{color:var(--cone)} .ctile b.d{color:var(--accent)} .ctile b.f{color:var(--amber)}
+  .ctile i{font:600 9px/1.2 system-ui;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-style:normal}
+
+  .clist{display:flex;flex-direction:column;background:var(--surface-2);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .clist .crow{display:flex;gap:9px;align-items:baseline;padding:8px 10px;border-bottom:1px solid var(--line)}
+  .clist .crow:last-child{border-bottom:0}
+  .clist .crow .k{flex:0 0 74px;font:600 10.5px/1.3 ui-monospace,Menlo,monospace;color:var(--muted)}
+  .clist .crow .v{flex:1 1 auto;font-size:12.5px;line-height:1.35}
+  .clist .crow.live{background:var(--accent-soft)}
+  .clist .crow.live .k,.clist .crow.live .lv{color:var(--accent-deep)}
+  .clist .crow .lv{flex:0 0 auto;font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+  .clist .crow.out .v{color:var(--muted)}
+  .cempty{padding:10px;font-size:12.5px;color:var(--muted)}
+
+  .cbig{display:flex;align-items:flex-end;gap:12px}
+  .cbig b{font:700 40px/1 ui-monospace,Menlo,monospace;letter-spacing:-.03em}
+  .cbig span{flex:1 1 auto;font-size:12.5px;line-height:1.45;color:var(--muted)}
+  .cbig span b{font-size:12.5px;color:var(--ink);font-family:inherit;letter-spacing:0}
+  .csplit{display:flex;height:12px;border-radius:3px;overflow:hidden;background:var(--chalk)}
+  .csplit .d{background:var(--accent)} .csplit .f{background:var(--amber)} .csplit .gk{background:var(--cone)}
+  .ckey{display:flex;gap:14px;font:600 11px system-ui;color:var(--muted)}
+  .ckey span{display:inline-flex;align-items:center;gap:5px}
+  .ckey i{width:9px;height:9px;border-radius:2px;display:block}
+  .ckey i.d{background:var(--accent)} .ckey i.f{background:var(--amber)} .ckey i.gk{background:var(--cone)}
+
+  .cnotes{display:flex;flex-direction:column;gap:6px}
+  .cnoteitem{display:flex;align-items:flex-start;gap:9px;padding:10px;background:var(--surface-2);
+    border-left:3px solid var(--accent-deep);border-radius:0 9px 9px 0}
+  .cnoteitem .k{flex:0 0 auto;font:600 10px/1.5 ui-monospace,Menlo,monospace;color:var(--muted)}
+  .cnoteitem .t{flex:1 1 auto;font-size:13px;line-height:1.5}
+  .cnoteitem .x{flex:0 0 auto;appearance:none;border:0;background:none;color:var(--muted);
+    font-size:15px;line-height:1;cursor:pointer;padding:0 2px;font-family:inherit}
+
+  .cardsheet .cacts{flex:0 0 auto;display:flex;gap:7px;padding:11px 16px 14px;
+    border-top:1px solid var(--line);background:var(--surface)}
+  .cardsheet .cacts .btn{flex:1 1 auto;min-height:46px;justify-content:center}
+  .cardsheet .cacts .btn.sq{flex:0 0 auto;width:46px;padding:0}
+
+  /* the roster row's card target — the row itself is already the IN/OUT toggle */
+  ul.roster .rowinfo{
+    flex:0 0 auto;appearance:none;font-family:inherit;cursor:pointer;
+    width:34px;height:34px;margin-right:4px;border-radius:9px;border:1px solid var(--line);
+    background:var(--surface-2);color:var(--muted);font-size:15px;line-height:1;display:grid;place-items:center;
+  }
+  ul.roster .rowinfo:hover{background:var(--accent-soft);color:var(--accent-deep)}
+  /* a 500ms hold on a chip opens the card — without this the hold selects text
+     or raises the OS callout instead */
+  .jchip{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 
   /* season archive: leaders board + per-game rollup */
   .sec-head{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:16px 0 8px}

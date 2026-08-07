@@ -43,6 +43,9 @@
               </select>
             </div>
             <button class="btn ghost" id="copyLink" data-act="copy-link" style="flex:0 0 auto" hidden>🔗 Copy team link</button>
+            <!-- Sits next to the share link on purpose: the passphrase is a
+                 second gate on that link, so the two belong together. -->
+            <button class="btn ghost" id="lockBtn" data-act="passphrase" style="flex:0 0 auto" title="Require a passphrase as well as the team link" hidden>🔓 Add a passphrase</button>
           </div>
           <ul class="roster" id="rosterList"></ul>
           <div class="hint" id="presentCount" style="margin-top:10px"></div>
@@ -171,7 +174,7 @@
           <div class="scoreboard">
             <div class="sb-top">
               <span class="pill caps period-pill" id="periodPill">Period 1</span>
-              <button class="pill caps pnext no-print" data-act="period-next" title="End this period">Period +</button>
+              <button class="pill caps pnext no-print" id="periodPlus" data-act="period-next" title="End this period">Period +</button>
               <span class="sp"></span>
               <span class="ends tnum" id="endsAt"></span>
             </div>
@@ -202,7 +205,7 @@
 
         <div>
           <div class="field-mini">
-            <h3><span id="fmTitle">On the field</span><span class="fm-hint" id="fmHint" hidden></span></h3>
+            <h3><span id="fmTitle">On the field</span><span class="fm-hint" id="fmHint" hidden></span><span class="fm-prog tnum" id="fmProg"></span></h3>
             <div class="onfield" id="onFieldChips"><span class="hint" style="color:rgba(255,255,255,.7)">Build a lineup first to see who's on.</span></div>
             <div class="bench-note" id="benchNote"></div>
             <div class="subline" id="subLine"></div>
@@ -385,6 +388,11 @@
      game clock's own repaint along with it -->
 <dialog id="askDialog" class="sheet"></dialog>
 
+<!-- The player card. One sheet for all three framings in the design — hold a
+     chip on Game Day, or tap ⓘ on a roster row. Stacks over #askDialog fine
+     (nested <dialog> modals are allowed), which is how its own prompts work. -->
+<dialog id="cardDialog" class="sheet cardsheet" aria-label="Player card"></dialog>
+
 <!-- Pocket lock. Covers everything so a hand or a pocket can't tap the app;
      the clock underneath keeps running and still sounds the period alarm. -->
 <div class="lockscreen no-print" id="lockScreen" role="dialog" aria-label="Locked — press and hold to unlock" hidden>
@@ -398,6 +406,9 @@
 <script src="/drills.js"></script>
 <script src="/diagram.js"></script>
 <script src="/lineup-core.js"></script>
+<script src="/state.js"></script>
+<script src="/stats.js"></script>
+<script src="/outbox.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>
