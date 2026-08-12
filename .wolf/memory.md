@@ -880,3 +880,80 @@ Reset moved from `.gd-controls` onto the clock row as an edge tag mirroring Edit
 | 09:41 | Added top padding to .panel, zeroed for #p-game (Game Day keeps its own sticky clock band) | public/app.css | done | ~40 |
 | 09:39 | Session end: 1 writes across 1 files (app.css) | 2 reads | ~24021 tok |
 | 10:12 | Session end: 1 writes across 1 files (app.css) | 2 reads | ~24021 tok |
+
+## Session: 2026-08-09 03:00
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-08-10 09:09
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-08-10 09:09
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-08-10 09:09
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-08-10 09:09
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-08-10 10:38
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 10:52 | Created docs/infrastructure-audit.md | — | ~3481 |
+| 10:52 | Infrastructure audit + adversarial review (subagent) — 2 High, 4 Medium, rest low; saved findings doc | docs/infrastructure-audit.md, .wolf/anatomy.md, .wolf/cerebrum.md | done | ~95k |
+| 10:53 | Session end: 1 writes across 1 files (infrastructure-audit.md) | 24 reads | ~74396 tok |
+| 15:02 | Created docs/infrastructure-fixes-handoff.md | — | ~2629 |
+| 15:02 | Wrote fix handoff prompt (6 groups + deferred list) from infra audit | docs/infrastructure-fixes-handoff.md | done | ~4k |
+| 15:02 | Session end: 2 writes across 2 files (infrastructure-audit.md, infrastructure-fixes-handoff.md) | 24 reads | ~77212 tok |
+
+## Session: 2026-08-11 20:46
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-08-11 20:46
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 20:50 | Edited src/worker.js | added error handling | ~154 |
+| 20:50 | Edited src/worker.js | 4→2 lines | ~24 |
+| 20:50 | Edited src/worker.js | modified decodeURIComponent() | ~51 |
+| 20:50 | Edited src/worker.js | inline fix | ~29 |
+| 20:50 | Edited src/worker.js | added 1 condition(s) | ~197 |
+| 20:50 | Edited src/worker.js | added 1 condition(s) | ~52 |
+| 20:51 | Edited src/worker.js | added 2 condition(s) | ~472 |
+| 20:51 | Edited src/worker.js | added 1 condition(s) | ~44 |
+| 20:51 | Edited src/worker.js | added 1 condition(s) | ~68 |
+| 20:51 | Edited src/worker.js | added 1 condition(s) | ~61 |
+| 20:51 | Edited src/worker.js | added 1 condition(s) | ~61 |
+| 20:51 | Edited src/worker.js | added 1 condition(s) | ~52 |
+| 20:51 | Edited src/worker.js | added 1 condition(s) | ~55 |
+| 20:51 | Edited src/worker.js | added 1 condition(s) | ~63 |
+| 20:52 | Edited src/worker.js | modified if() | ~333 |
+| 20:52 | Edited test/worker.test.mjs | calls() → test() | ~378 |
+| 20:52 | Edited test/worker.test.mjs | added 3 condition(s) | ~824 |
+| 20:53 | Edited test/schedule.test.mjs | 4→5 lines | ~112 |
+| 20:53 | Edited package.json | 6→6 lines | ~91 |
+| 20:53 | Edited docker-compose.yml | 2→4 lines | ~61 |
+| 20:55 | Created migrations/0000_init.sql | — | ~1174 |
+| 20:57 | Edited README.md | 4→4 lines | ~85 |
+| 20:57 | Edited README.md | inline fix | ~20 |
+| 20:58 | Edited README.md | 30→32 lines | ~521 |
+| 20:58 | Edited README.md | modified season() | ~119 |
+| 20:58 | Edited README.md | "schema.sql" → "migrations/" | ~27 |
+| 21:05 | Infra-audit fixes: S1 schedule row-existence gate + M3 alarm try/catch | src/worker.js, test/worker.test.mjs, test/schedule.test.mjs | 119/119 tests green | ~900 |
+| 21:05 | C1 putTeam TOCTOU fix (conditional UPDATE + INSERT fallback) | src/worker.js, test/worker.test.mjs | lost-write race closed, test added | ~600 |
+| 21:05 | Group 5 DRY: dbOf() + readJson() helpers | src/worker.js | 8 try/catch + 3 db-binding sites deduped | ~300 |
+| 21:05 | Group 2 deploy hygiene: test-gated deploy, tunnel restart:no, backup note | package.json, docker-compose.yml, README.md | C3/C5/C4 done | ~150 |
+| 21:05 | C2 migrations: schema.sql→0000_init.sql, deleted 0001/0002 ALTERs, db:migrate scripts | migrations/, package.json, README.md, .wolf/anatomy.md, .wolf/cerebrum.md | fresh local migrate verified (10 cmds, idempotent); PROD apply left for user | ~1200 |

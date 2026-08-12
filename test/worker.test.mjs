@@ -2,8 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import worker from "../src/worker.js";
 
-// Minimal in-memory stand-in for the D1 binding: enough of prepare/bind/first/run
-// to exercise the worker's real SQL calls (SELECT by id, INSERT ... ON CONFLICT).
+// Minimal in-memory stand-in for the D1 binding. All first() queries in the worker
+// are SELECT ... WHERE id = ? (id is the first bind arg); run() dispatches on the
+// statement so the conditional UPDATE / INSERT split in putTeam is exercised for real.
 function makeD1() {
   const rows = new Map();
   return {
@@ -17,10 +18,20 @@ function makeD1() {
           return r ? { ...r } : null;
         },
         async run() {
-          const [id, doc, rev, updated_at, created_at] = this.args;
-          const ex = rows.get(id);
-          rows.set(id, ex ? { ...ex, doc, rev, updated_at } : { id, doc, rev, updated_at, created_at });
-          return { success: true };
+          const s = this.sql;
+          if (/^\s*INSERT INTO teams/i.test(s)) {
+            const [id, doc, rev, updated_at, created_at] = this.args;
+            rows.set(id, { id, doc, rev, updated_at, created_at });
+            return { success: true, meta: { changes: 1 } };
+          }
+          if (/^\s*UPDATE teams SET doc/i.test(s)) {
+            const [doc, rev, updated_at, id, guardRev] = this.args;   // guardRev undefined on the unconditional form
+            const ex = rows.get(id);
+            if (!ex || (guardRev !== undefined && ex.rev !== guardRev)) return { success: true, meta: { changes: 0 } };
+            rows.set(id, { ...ex, doc, rev, updated_at });
+            return { success: true, meta: { changes: 1 } };
+          }
+          return { success: true, meta: { changes: 0 } };
         },
       };
     },
@@ -120,6 +131,77 @@ test("rejects a doc that isn't a JSON string", async () => {
 test("unknown api path 404s, wrong method 405s", async () => {
   assert.equal((await worker.fetch(req("/api/nope"), env())).status, 404);
   assert.equal((await worker.fetch(req(`/api/team/${ID}`, { method: "DELETE" }), env())).status, 405);
+});
+
+test("baseRev:null writes unconditionally (client sent no base)", async () => {
+  const e = env();
+  await worker.fetch(req(`/api/team/${ID}`, {
+    method: "PUT", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ doc: DOC, baseRev: 0 }),
+  }), e); // rev 1
+  const r = await worker.fetch(req(`/api/team/${ID}`, {
+    method: "PUT", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ doc: DOC }), // no baseRev
+  }), e);
+  assert.equal(r.status, 200);
+  assert.equal((await r.json()).rev, 2);
+});
+
+// C1 — the lost-write race. Two writers both read rev 5; the first UPDATE wins,
+// the second's guarded UPDATE matches no row and must 409 instead of overwriting.
+test("concurrent writers on the same base rev: the loser gets a 409, not a silent overwrite", async () => {
+  const rows = new Map([[ID, { id: ID, doc: DOC, rev: 5, updated_at: 1, created_at: 1 }]]);
+  const db = {
+    prepare(sql) {
+      return {
+        sql, args: [],
+        bind(...a) { this.args = a; return this; },
+        async first() {
+          if (/SELECT rev/i.test(sql)) return { rev: 5 };   // both callers read the stale rev
+          const r = rows.get(this.args[0]); return r ? { ...r } : null;
+        },
+        async run() {
+          if (/^\s*UPDATE teams SET doc/i.test(sql)) {
+            const [doc, rev, updated_at, id, guardRev] = this.args;
+            const ex = rows.get(id);
+            if (!ex || (guardRev !== undefined && ex.rev !== guardRev)) return { meta: { changes: 0 } };
+            rows.set(id, { ...ex, doc, rev, updated_at }); return { meta: { changes: 1 } };
+          }
+          return { meta: { changes: 0 } };
+        },
+      };
+    },
+  };
+  const e = { DB: db };
+  const put = () => worker.fetch(req(`/api/team/${ID}`, {
+    method: "PUT", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ doc: DOC, baseRev: 5 }),
+  }), e);
+
+  const r1 = await put();
+  assert.equal(r1.status, 200);                 // first writer wins, rev -> 6
+  const r2 = await put();
+  assert.equal(r2.status, 409);                 // second read rev 5; UPDATE WHERE rev=5 matched nothing
+  assert.equal((await r2.json()).rev, 6);       // and it hands back the current rev to reconcile
+});
+
+/* ---------- S1: schedule endpoint requires the team to exist ---------- */
+
+test("schedule 404s for an unknown team id", async () => {
+  const r = await worker.fetch(req(`/api/team/${ID}/schedule`), env());
+  assert.equal(r.status, 404);
+});
+
+test("schedule gets past the existence check for a known team", async () => {
+  const e = env();
+  await worker.fetch(req(`/api/team/${ID}`, {
+    method: "PUT", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ doc: DOC, baseRev: 0 }),
+  }), e);
+  const r = await worker.fetch(req(`/api/team/${ID}/schedule`), e);
+  // GC_ICS_URL is unset in the test env, so a team that DOES exist reaches the
+  // config check (501) rather than being turned away as not_found (404).
+  assert.equal(r.status, 501);
 });
 
 /* ---------- web push: VAPID (RFC 8292) ---------- */

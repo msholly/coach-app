@@ -1,7 +1,18 @@
--- Coach's Sideline — D1 schema
+-- Coach's Sideline — D1 schema (init migration)
 -- One row per team. The whole app state (roster, lineups, practice plan, game state)
 -- lives in `doc` as a JSON string. `rev` powers optimistic-concurrency; `updated_at`
 -- (ms epoch) is the last-write clock the client uses to decide who's newer.
+--
+-- Applied with the D1 migrations framework (see package.json db:migrate[:local]):
+--   npx wrangler d1 migrations apply coach-sideline-db --local
+--   npx wrangler d1 migrations apply coach-sideline-db --remote
+--
+-- Everything here is CREATE TABLE IF NOT EXISTS, so this is idempotent: running it
+-- against an already-provisioned DB is a no-op. It is the FULL current schema —
+-- the former migrations/0001 (games.venue) and 0002 (teams.pass_hash) ALTERs are
+-- folded in here, so there are no ALTERs left to fail with "duplicate column name"
+-- on a fresh apply. A DB provisioned before the framework existed just needs its
+-- d1_migrations row seeded (see README "Schema migrations").
 
 CREATE TABLE IF NOT EXISTS teams (
   id          TEXT    PRIMARY KEY,          -- unguessable token (also the share link)

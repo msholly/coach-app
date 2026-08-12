@@ -15,6 +15,17 @@ const POS = new Set(["GK", "D", "F"]);
 const SECRETISH = /([?&](?:token|key|auth|access_token|sig)=)[^&\s"']+/gi;
 const redact = (s) => String(s == null ? "" : s).replace(SECRETISH, "$1[redacted]");
 
+// The D1 binding is either the auto-generated "coach_sideline_db" name or the
+// template default "DB". One place to resolve it.
+const dbOf = (env) => env.coach_sideline_db || env.DB;
+
+// One parse point for every JSON request body: null means "unparseable", which
+// every caller turns into a 400. A valid `null` JSON body is unparseable too,
+// which is the right answer everywhere here.
+async function readJson(request) {
+  try { return await request.json(); } catch { return null; }
+}
+
 const json = (obj, status = 200, extra = {}) =>
   new Response(JSON.stringify(obj), {
     status,
@@ -49,9 +60,7 @@ export default {
         const id = decodeURIComponent(m[1]);
         if (!ID_RE.test(id)) return json({ error: "bad_team_id" }, 400);
 
-        // Resolve the D1 binding from wrangler.jsonc — supports the auto-generated
-        // "coach_sideline_db" name as well as the template default "DB".
-        const db = env.coach_sideline_db || env.DB;
+        const db = dbOf(env);
         const denied = await gate(db, id, request);
         if (denied) return denied;
         if (request.method === "GET") return getTeam(db, id);
@@ -65,7 +74,7 @@ export default {
       if (m2) {
         const id = decodeURIComponent(m2[1]);
         if (!ID_RE.test(id)) return json({ error: "bad_team_id" }, 400);
-        const db = env.coach_sideline_db || env.DB;
+        const db = dbOf(env);
         const kind = m2[2], sub = m2[3] ? decodeURIComponent(m2[3]) : null;
 
         // /auth is the way IN, so it cannot sit behind the gate.
@@ -87,7 +96,7 @@ export default {
         if (kind === "push" && !sub && request.method === "POST") return postPushSub(db, id, request);
         if (kind === "push" && !sub && request.method === "DELETE") return deletePushSub(db, id, request);
         if (kind === "alarm" && !sub && request.method === "POST") return postAlarm(env, id, request);
-        if (kind === "schedule" && !sub && request.method === "GET") return getSchedule(env, request);
+        if (kind === "schedule" && !sub && request.method === "GET") return getSchedule(env, db, id);
         return json({ error: "method_not_allowed" }, 405);
       }
 
@@ -110,13 +119,9 @@ async function getTeam(db, id) {
 }
 
 async function putTeam(db, id, request, url) {
-  let body;
-  try {
-    body = await request.json();
-  } catch {
-    return json({ error: "invalid_json_body" }, 400);
-  }
-  const doc = body && body.doc;
+  const body = await readJson(request);
+  if (body === null) return json({ error: "invalid_json_body" }, 400);
+  const doc = body.doc;
   if (typeof doc !== "string") return json({ error: "doc_must_be_string" }, 400);
   if (doc.length > MAX_DOC_BYTES) return json({ error: "doc_too_large", maxBytes: MAX_DOC_BYTES }, 413);
   // The doc must itself be valid JSON (the app state) — reject junk at the boundary.
@@ -147,13 +152,34 @@ async function putTeam(db, id, request, url) {
 
   const now = Date.now();
   const newRev = curRev + 1;
-  await db
-    .prepare(
-      "INSERT INTO teams (id, doc, rev, updated_at, created_at) VALUES (?, ?, ?, ?, ?) " +
-      "ON CONFLICT(id) DO UPDATE SET doc = excluded.doc, rev = excluded.rev, updated_at = excluded.updated_at"
-    )
-    .bind(id, doc, newRev, now, now)
-    .run();
+
+  // Conditional write, not the old SELECT-then-blind-upsert: two writers who both
+  // read curRev=5 would both have passed the baseRev check above and both written
+  // rev=6, silently losing one edit. Guard the UPDATE on the rev we just read so
+  // the second writer's UPDATE matches no row (changes===0) and gets a 409.
+  // force / baseRev:null keep writing unconditionally (UPDATE-by-id, INSERT if new).
+  const guarded = !force && baseRev !== null;
+  const res = guarded
+    ? await db.prepare("UPDATE teams SET doc = ?, rev = ?, updated_at = ? WHERE id = ? AND rev = ?")
+        .bind(doc, newRev, now, id, curRev).run()
+    : await db.prepare("UPDATE teams SET doc = ?, rev = ?, updated_at = ? WHERE id = ?")
+        .bind(doc, newRev, now, id).run();
+
+  if ((res.meta ? res.meta.changes : 0) === 0) {
+    if (!cur) {
+      // First write for this id — no row to update.
+      await db.prepare("INSERT INTO teams (id, doc, rev, updated_at, created_at) VALUES (?, ?, ?, ?, ?)")
+        .bind(id, doc, newRev, now, now).run();
+      return json({ id, rev: newRev, updatedAt: now });
+    }
+    // A row exists but the guarded UPDATE matched nothing: someone advanced the
+    // rev between our SELECT and our UPDATE. Return the current doc to reconcile.
+    const full = await db.prepare("SELECT doc, rev, updated_at FROM teams WHERE id = ?").bind(id).first();
+    return json(
+      { error: "conflict", id, doc: full ? full.doc : null, rev: full ? full.rev : curRev, updatedAt: full ? full.updated_at : null },
+      409
+    );
+  }
 
   return json({ id, rev: newRev, updatedAt: now });
 }
@@ -267,8 +293,8 @@ async function authStatus(db, id, request) {
 //   { pass, newPass }      change it from a device with no live session
 //   { newPass: null }      remove it, unlocking the team
 async function postAuth(env, db, id, request) {
-  let b;
-  try { b = await request.json(); } catch { return json({ error: "invalid_json_body" }, 400); }
+  const b = await readJson(request);
+  if (b === null) return json({ error: "invalid_json_body" }, 400);
 
   // Rate limit BEFORE any PBKDF2 work: unlimited guesses are both the
   // brute-force path and a way to burn the Worker's CPU budget. Keyed on the
@@ -321,9 +347,9 @@ const str = (v, n) => String(v == null ? "" : v).slice(0, n);
 
 // Upsert the game row: kickoff writes it, full time (and score changes) update it.
 async function postGame(db, teamId, request) {
-  let b;
-  try { b = await request.json(); } catch { return json({ error: "invalid_json_body" }, 400); }
-  if (!b || !GID_RE.test(String(b.id || ""))) return json({ error: "bad_game_id" }, 400);
+  const b = await readJson(request);
+  if (b === null) return json({ error: "invalid_json_body" }, 400);
+  if (!GID_RE.test(String(b.id || ""))) return json({ error: "bad_game_id" }, 400);
   const started = +b.started_at;
   if (!Number.isFinite(started) || started <= 0) return json({ error: "bad_started_at" }, 400);
   const ended = +b.ended_at;
@@ -347,9 +373,9 @@ async function postGame(db, teamId, request) {
 }
 
 async function postEvents(db, teamId, request) {
-  let b;
-  try { b = await request.json(); } catch { return json({ error: "invalid_json_body" }, 400); }
-  const list = b && Array.isArray(b.events) ? b.events : null;
+  const b = await readJson(request);
+  if (b === null) return json({ error: "invalid_json_body" }, 400);
+  const list = Array.isArray(b.events) ? b.events : null;
   if (!list) return json({ error: "events_must_be_array" }, 400);
   if (list.length > BATCH_MAX) return json({ error: "batch_too_large", max: BATCH_MAX }, 400);
   const stmts = [];
@@ -371,9 +397,9 @@ async function postEvents(db, teamId, request) {
 }
 
 async function postAppearances(db, teamId, request) {
-  let b;
-  try { b = await request.json(); } catch { return json({ error: "invalid_json_body" }, 400); }
-  const rows = b && Array.isArray(b.rows) ? b.rows : null;
+  const b = await readJson(request);
+  if (b === null) return json({ error: "invalid_json_body" }, 400);
+  const rows = Array.isArray(b.rows) ? b.rows : null;
   if (!rows) return json({ error: "rows_must_be_array" }, 400);
   if (rows.length > BATCH_MAX) return json({ error: "batch_too_large", max: BATCH_MAX }, 400);
   const stmts = [];
@@ -543,7 +569,15 @@ export function parseIcsEvents(text) {
   return out.sort((a, b) => (a.startsAt || 0) - (b.startsAt || 0));
 }
 
-async function getSchedule(env, request) {
+async function getSchedule(env, db, id) {
+  // gate() lets a nonexistent team through (link is the credential on an unlocked
+  // team), and the GC feed is a single global secret — so without this check
+  // ANY well-formed id would be served the coach's family schedule. Require the
+  // team row to exist. ponytail: a row-existence check, not an env allowlist —
+  // real team ids are 128-bit random and unguessable.
+  const team = await db.prepare("SELECT 1 FROM teams WHERE id = ?").bind(id).first();
+  if (!team) return json({ error: "not_found" }, 404);
+
   const raw = env.GC_ICS_URL;
   if (!raw) return json({ error: "schedule_unavailable", reason: "GC_ICS_URL is not set" }, 501);
   // The subscribe link is handed out as webcal://; that scheme means nothing to fetch().
@@ -630,9 +664,9 @@ async function sendPush(env, endpoint) {
 }
 
 async function postPushSub(db, id, request) {
-  let body;
-  try { body = await request.json(); } catch { return json({ error: "invalid_json_body" }, 400); }
-  const sub = body && body.sub;
+  const body = await readJson(request);
+  if (body === null) return json({ error: "invalid_json_body" }, 400);
+  const sub = body.sub;
   const endpoint = sub && sub.endpoint;
   if (typeof endpoint !== "string" || endpoint.length > MAX_ENDPOINT) return json({ error: "bad_endpoint" }, 400);
   let u;
@@ -648,9 +682,9 @@ async function postPushSub(db, id, request) {
 }
 
 async function deletePushSub(db, id, request) {
-  let body;
-  try { body = await request.json(); } catch { return json({ error: "invalid_json_body" }, 400); }
-  const endpoint = body && body.endpoint;
+  const body = await readJson(request);
+  if (body === null) return json({ error: "invalid_json_body" }, 400);
+  const endpoint = body.endpoint;
   if (typeof endpoint !== "string" || endpoint.length > MAX_ENDPOINT) return json({ error: "bad_endpoint" }, 400);
   await db.prepare("DELETE FROM push_subs WHERE endpoint = ? AND team_id = ?").bind(endpoint, id).run();
   return json({ ok: true });
@@ -660,9 +694,9 @@ async function deletePushSub(db, id, request) {
 // per team, so a second device starting the clock just moves the same alarm.
 async function postAlarm(env, id, request) {
   if (!env.GAME_CLOCK) return json({ error: "alarms_unavailable" }, 501);
-  let body;
-  try { body = await request.json(); } catch { return json({ error: "invalid_json_body" }, 400); }
-  const at = Number(body && body.at) || 0;
+  const body = await readJson(request);
+  if (body === null) return json({ error: "invalid_json_body" }, 400);
+  const at = Number(body.at) || 0;
   // A far-future alarm would pin a DO forever; a past one would fire instantly.
   if (at && (at < Date.now() || at > Date.now() + 6 * 3600 * 1000)) return json({ error: "bad_alarm_time" }, 400);
   const stub = env.GAME_CLOCK.get(env.GAME_CLOCK.idFromName(id));
@@ -684,21 +718,28 @@ export class GameClock {
       await this.ctx.storage.setAlarm(at);
     } else {
       await this.ctx.storage.deleteAlarm();
+      await this.ctx.storage.delete("team");
     }
     return new Response(null, { status: 204 });
   }
 
   async alarm() {
-    const team = await this.ctx.storage.get("team");
-    if (!team) return;
-    const db = this.env.coach_sideline_db || this.env.DB;
-    const { results } = await db.prepare("SELECT endpoint FROM push_subs WHERE team_id = ?").bind(team).all();
-    for (const row of results || []) {
-      let status = 0;
-      try { status = await sendPush(this.env, row.endpoint); } catch { /* a dead push service must not block the rest */ }
-      if (status === 404 || status === 410) {
-        await db.prepare("DELETE FROM push_subs WHERE endpoint = ?").bind(row.endpoint).run();
+    // The whole body is wrapped: a throw here (e.g. the DELETE prune below) makes
+    // the DO runtime RETRY the alarm, which re-notifies every phone. Log-and-swallow.
+    try {
+      const team = await this.ctx.storage.get("team");
+      if (!team) return;
+      const db = dbOf(this.env);
+      const { results } = await db.prepare("SELECT endpoint FROM push_subs WHERE team_id = ?").bind(team).all();
+      for (const row of results || []) {
+        let status = 0;
+        try { status = await sendPush(this.env, row.endpoint); } catch { /* a dead push service must not block the rest */ }
+        if (status === 404 || status === 410) {
+          await db.prepare("DELETE FROM push_subs WHERE endpoint = ?").bind(row.endpoint).run();
+        }
       }
+    } catch (err) {
+      console.log("GameClock.alarm failed:", redact(String(err && err.message || err)));
     }
   }
 }

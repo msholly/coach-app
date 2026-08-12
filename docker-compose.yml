@@ -2,7 +2,9 @@ services:
   tunnel:
     image: cloudflare/cloudflared:latest
     container_name: coach-app-tunnel
-    restart: unless-stopped
+    # Do NOT auto-resurrect: the tunnel exposes the unauthenticated local dev
+    # server + dev D1 whenever it's up. Start it by hand when actually needed.
+    restart: "no"
     command: tunnel --config /etc/cloudflared/config.yml run coach-app-dev
     volumes:
       - ${USERPROFILE}/.cloudflared/coach-app-dev-config.yml:/etc/cloudflared/config.yml:ro

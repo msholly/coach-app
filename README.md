@@ -19,8 +19,8 @@ npm install
 npx wrangler login
 npx wrangler d1 create coach-sideline-db     # copy the printed database_id ...
 #   ... paste it into wrangler.jsonc  ->  d1_databases[0].database_id
-npm run db:init                              # applies schema.sql to the REMOTE D1
-npm run deploy
+npm run db:migrate                           # applies migrations/ to the REMOTE D1
+npm run deploy                               # runs the tests, then wrangler deploy
 ```
 
 Then put it on your domain (`coach.mitchellsholly.com`): easiest is the dashboard —
@@ -35,7 +35,7 @@ coach's phone. Same link = same synced team.
 ## Local dev
 
 ```bash
-npm run db:init:local     # applies schema to a local (miniflare) D1
+npm run db:migrate:local  # applies migrations/ to a local (miniflare) D1
 cp .dev.vars.example .dev.vars   # then fill in — .dev.vars is gitignored
 npm run dev               # wrangler dev — open the printed http://localhost:PORT
 ```
@@ -44,34 +44,36 @@ npm run dev               # wrangler dev — open the printed http://localhost:P
 
 ## Schema migrations
 
-`schema.sql` is all `CREATE TABLE IF NOT EXISTS`, so re-running it will **not** add a
-column to a table that already exists. A new column needs an edit to `schema.sql` (for
-fresh databases) *and* a numbered file in `migrations/` (for existing ones):
+Migrations live in `migrations/` and are applied with the D1 migrations framework, which
+sends each statement through the working `/query` API path — **not** the `--file`/`/import`
+path that fails under a `wrangler login` (OAuth) token with `Authentication error [code: 10000]`.
 
 ```bash
-npx wrangler d1 execute coach-sideline-db --local  --file=./migrations/0001_games_venue.sql
-npx wrangler d1 execute coach-sideline-db --remote --file=./migrations/0001_games_venue.sql
-npx wrangler d1 execute coach-sideline-db --local  --file=./migrations/0002_teams_pass.sql
-npx wrangler d1 execute coach-sideline-db --remote --file=./migrations/0002_teams_pass.sql
+npm run db:migrate:local   # wrangler d1 migrations apply ... --local
+npm run db:migrate         # wrangler d1 migrations apply ... --remote
 ```
 
-> **`--remote --file` fails with an OAuth login.** It uploads through D1's `/import` endpoint,
-> which answers `Authentication error [code: 10000]` for a `wrangler login` token — even a
-> super-admin one with `d1 (write)`. `--command` goes through `/query` and works with the same
-> token, so run remote migrations statement by statement:
+`migrations/0000_init.sql` is the full schema, all `CREATE TABLE IF NOT EXISTS` — idempotent,
+so applying it to an already-provisioned DB is a no-op. A new column is a new numbered file
+(`0001_*.sql`, an `ALTER TABLE`); the framework tracks what's applied in a `d1_migrations`
+table and only runs the new ones.
+
+> **Adopting the framework on a DB that predates it** (provisioned with the old `db:init`):
+> the remote already has every table and column, so `apply` must not re-run anything. Seed the
+> tracking table first — `--command` works with an OAuth token where `--file` does not:
 >
 > ```bash
-> npx wrangler d1 execute coach-sideline-db --remote --command="ALTER TABLE teams ADD COLUMN pass_hash TEXT"
-> ```
->
-> This also means **`npm run db:init` cannot set up a remote database** — it is `--file`. After a
-> fresh `wrangler d1 create`, either create the tables with `--command` one at a time, or export
-> `CLOUDFLARE_API_TOKEN` (a real API token with D1 Edit) so the import endpoint accepts you.
-> Check what actually exists before assuming a deploy is healthy:
->
-> ```bash
+> # 1. confirm what's really there (bug-140 history: don't assume)
 > npx wrangler d1 execute coach-sideline-db --remote --command="SELECT name FROM sqlite_master WHERE type='table'"
+> # 2. create + seed the tracker so 0000 is marked applied and never re-runs
+> npx wrangler d1 execute coach-sideline-db --remote --command="CREATE TABLE IF NOT EXISTS d1_migrations(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, applied_at TIMESTAMP NOT NULL DEFAULT current_timestamp); INSERT OR IGNORE INTO d1_migrations(name) VALUES ('0000_init.sql')"
+> # 3. now this is a clean no-op, and future migrations apply normally
+> npm run db:migrate
 > ```
+>
+> (0000 is all `CREATE TABLE IF NOT EXISTS`, so even an un-seeded re-run is harmless — the seed
+> just keeps `migrations list` honest. It's the ALTER files in *future* migrations that would
+> fail on a double-apply, which is what the tracker prevents.)
 
 ## GameChanger schedule (optional, read-only)
 
@@ -147,6 +149,11 @@ add `nosniff` in `src/worker.js`. The CSP allows **no external origins and no in
 - It's kids' data — keep entries to **first name + last initial**.
 - **Backups are automatic:** D1 **Time Travel** keeps 30 days of point-in-time history —
   restore with `npx wrangler d1 time-travel restore coach-sideline-db --timestamp=<ISO>`.
+- **A season outlives 30 days**, so export a full snapshot at least once a season (export uses
+  a working API path; the `/import` OAuth bug does not affect it):
+  ```bash
+  npx wrangler d1 export coach-sideline-db --remote --output=backup-$(date +%Y%m%d).sql
+  ```
 
 ## Files
 
@@ -154,7 +161,7 @@ add `nosniff` in `src/worker.js`. The CSP allows **no external origins and no in
 |------|------|
 | `public/index.html` | The whole app + the local-first sync client (single file). |
 | `src/worker.js` | Serves the app (ASSETS binding) + the `/api/*` JSON API over D1. |
-| `schema.sql` | The one `teams` table. |
+| `migrations/` | D1 schema; `0000_init.sql` is the full schema, applied via `db:migrate[:local]`. |
 | `wrangler.jsonc` | Worker config: static assets, `run_worker_first` for `/api/*`, D1 binding. |
 | `test/worker.test.mjs` | API unit tests (mock D1). |
 

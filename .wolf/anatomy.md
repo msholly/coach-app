@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-08-07T16:38:50.336Z
-> Files: 91 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-08-11T03:58:26.184Z
+> Files: 94 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
 
@@ -9,11 +9,10 @@
 - `.dev.vars.example` — Local secrets for `wrangler dev`. Copy to `.dev.vars` and fill in. (~238 tok)
 - `.gitignore` — Git ignore rules (~14 tok)
 - `CLAUDE.md` — OpenWolf (~57 tok)
-- `docker-compose.yml` — Docker Compose services (~145 tok)
+- `docker-compose.yml` — Docker Compose services (~187 tok)
 - `package-lock.json` — npm lock file (~14099 tok)
-- `package.json` — Node.js package manifest (~162 tok)
-- `README.md` — Project documentation (~2348 tok)
-- `schema.sql` — Database schema (~1055 tok)
+- `package.json` — Node.js package manifest (~161 tok)
+- `README.md` — Project documentation (~2535 tok)
 - `wrangler.jsonc` (~524 tok)
 
 ## .claude/
@@ -47,7 +46,7 @@
 
 ## .wrangler/state/v3/observability/miniflare-wobs-trace-store/
 
-- `a590acd76969f996ec6e4b599c3c09f58c283a76f2d61392b5d3046caf557602.sqlite-shm` (~8739 tok)
+- `a590acd76969f996ec6e4b599c3c09f58c283a76f2d61392b5d3046caf557602.sqlite-shm` (~8738 tok)
 - `metadata.sqlite-shm` (~8738 tok)
 - `metadata.sqlite-wal` (~2206 tok)
 
@@ -110,6 +109,8 @@
 - `game-day-design-prompt.md` — Game Day UI — design iteration prompt (~1488 tok)
 - `game-day-ui-plan.md` — Game Day UI — plan and adversarial review (~10821 tok)
 - `gamechanger-integration-plan.md` — GameChanger & League Platform Integration — Findings and Plan (~3109 tok)
+- `infrastructure-audit.md` — Infrastructure audit — findings and adversarial review (~3263 tok)
+- `infrastructure-fixes-handoff.md` — Handoff — infrastructure audit fixes (~2464 tok)
 - `on-field-design-prompt.md` — "On the field" — design iteration prompt (~2270 tok)
 - `voice-game-log-plan.md` — "Call the game out loud" — voice event log + LLM reporting (~13143 tok)
 
@@ -138,13 +139,12 @@
 
 ## migrations/
 
-- `0001_games_venue.sql` — Adds games.venue ("home" | "away"). (~239 tok)
-- `0002_teams_pass.sql` — Adds teams.pass_hash (optional per-team login passphrase). (~195 tok)
+- `0000_init.sql` — Full D1 schema, applied via `wrangler d1 migrations apply` (db:migrate[:local]). Idempotent (all CREATE TABLE IF NOT EXISTS); folds in the former 0001 venue / 0002 pass_hash ALTERs. (~1174 tok)
 
 ## public/
 
 - `_headers` — Security headers for the static app. Workers static assets support _headers (~256 tok)
-- `app.css` — Styles: 61 vars (~17677 tok)
+- `app.css` — Styles: 61 vars, 9 media queries, 2 animations (~17677 tok)
 - `app.js` — nowMs: fmt, load, loadMeta + 24 more (~43512 tok)
 - `diagram.js` — SVG drill diagrams: spec -> markup string. Pure — no DOM, no app state. (~909 tok)
 - `drills.js` — Drill library — static content, no logic. Loaded before app.js; exposes DRILLS. (~2681 tok)
@@ -158,7 +158,7 @@
 
 ## src/
 
-- `worker.js` — Coach's Sideline — Cloudflare Worker (~9688 tok)
+- `worker.js` — Coach's Sideline — Cloudflare Worker (~10357 tok)
 
 ## test/
 
@@ -169,8 +169,8 @@
 - `lineup.test.mjs` — lineup-core.js is a plain browser script; evaluate it and grab the global. (~4340 tok)
 - `outbox.test.mjs` — outbox.js is a plain browser script. It reads localStorage and fetch as free (~1504 tok)
 - `played.test.mjs` — lineup-core.js is a plain browser script; evaluate it and grab the global. (~2000 tok)
-- `schedule.test.mjs` — API routes: GET (1 endpoints) (~1717 tok)
+- `schedule.test.mjs` — API routes: GET (1 endpoints) (~1752 tok)
 - `season.test.mjs` — src: rng, buildGame, commit + 5 more (~5899 tok)
 - `state.test.mjs` — state.js is a plain browser script: it reads LineupCore and localStorage as (~1689 tok)
 - `stats.test.mjs` — Declares src (~1593 tok)
-- `worker.test.mjs` — Minimal in-memory stand-in for the D1 binding: enough of prepare/bind/first/run (~1751 tok)
+- `worker.test.mjs` — Minimal in-memory stand-in for the D1 binding. All first() queries in the worker (~2734 tok)

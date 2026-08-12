@@ -4,10 +4,11 @@ import worker, { parseIcsEvents } from "../src/worker.js";
 
 const TEAM = "abc123def456";
 const req = (path) => new Request("http://t" + path);
-// The auth gate runs before every archive route, schedule included. No team
-// row means no passphrase means the link is the gate — exactly the pre-lock
-// behaviour these tests were written against.
-const noTeamDb = { prepare: () => ({ bind: () => ({ first: async () => null }) }) };
+// The auth gate runs before every archive route, schedule included. An existing
+// team row with no pass_hash means the link is the gate (pre-lock behaviour), and
+// its existence satisfies the S1 check that getSchedule now does before serving
+// the global GC feed. `{}` is truthy (row exists) with pass_hash undefined (unlocked).
+const noTeamDb = { prepare: () => ({ bind: () => ({ first: async () => ({}) }) }) };
 
 // Shaped on the real GameChanger feed (PRODID -//com.gc/NONSGML GameChanger).
 const ics = (events) =>

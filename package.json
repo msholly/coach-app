@@ -6,10 +6,10 @@
   "description": "U8 AYSO coaching app — Cloudflare Worker + D1 (local-first sync)",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "deploy": "node --test && wrangler deploy",
     "db:create": "wrangler d1 create coach-sideline-db",
-    "db:init": "wrangler d1 execute coach-sideline-db --remote --file=./schema.sql",
-    "db:init:local": "wrangler d1 execute coach-sideline-db --local --file=./schema.sql",
+    "db:migrate": "wrangler d1 migrations apply coach-sideline-db --remote",
+    "db:migrate:local": "wrangler d1 migrations apply coach-sideline-db --local",
     "test": "node --test"
   },
   "devDependencies": {
