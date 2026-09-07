@@ -446,6 +446,8 @@
   .sb-top .pnext:hover{background:rgba(255,255,255,.1);color:#eef2e8}
   .period-pill{background:var(--cone);color:#fff;font-weight:700;cursor:default}
   .period-pill.break{background:var(--amber);color:#1b1405}
+  /* Practice/test game: loud amber so "this doesn't count" is unmissable in sunlight. */
+  .sb-top .practice-tag{background:var(--amber);color:#1b1405;font-weight:700;cursor:default}
   .ends{color:#9aa79a;font-size:13px}
   /* The clock is a button: tap → confirm → set-clock sheet, logged as a correction. */
   /* The row is the positioning context; both edge tags are absolute, so hiding

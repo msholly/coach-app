@@ -77,13 +77,29 @@
 
   function render() {
     var d = data; if (!d) return;
+    // Season rides in the green kicker; the title stays the team name.
+    var kicker = $("#kicker");
+    if (kicker) kicker.textContent = "🍊 Snack sign-up" + (d.season ? " · " + d.season : "");
     $("#teamName").textContent = d.team || d.calendar || "Team snacks";
     document.title = (d.team ? d.team + " · " : "") + "Snack sign-up";
+    // referees === false means the coach turned referee sign-up off for this
+    // team (e.g. BU5, no referees). Hide the slot; the server keeps the rows.
+    var refsOn = d.referees !== false;
     var now0 = Date.now();
     var open = d.events.filter(function (e) { return !e.signup && e.startsAt > now0; }).length;
-    var refsNeeded = d.events.filter(function (e) { return e.venue === "home" && !e.referee && e.startsAt > now0; }).length;
-    $("#sub").textContent = (d.season ? d.season + " · " : "") + d.events.length + " games · " + open + " snacks open" +
+    var refsNeeded = refsOn ? d.events.filter(function (e) { return e.venue === "home" && !e.referee && e.startsAt > now0; }).length : 0;
+    $("#sub").textContent = d.events.length + " game" + (d.events.length === 1 ? "" : "s") +
       (refsNeeded ? " · " + refsNeeded + " ref" + (refsNeeded === 1 ? "" : "s") + " needed" : "");
+    // Open snack count as a right-column badge; green "All covered" when none left.
+    var badge = $("#openBadge");
+    if (badge) {
+      if (!d.events.length) { badge.hidden = true; }
+      else {
+        badge.hidden = false;
+        badge.textContent = open ? open + " snack" + (open === 1 ? "" : "s") + " open" : "All snacks covered";
+        badge.classList.toggle("done", open === 0);
+      }
+    }
     $("#foot").hidden = false;
 
     var now = Date.now(), html = "", month = "";
@@ -98,7 +114,7 @@
         '<div class="sn-date"><span class="dow">' + DOW[dt.getDay()] + '</span><span class="day">' + dt.getDate() + '</span></div>' +
         '<div class="sn-body"><div class="sn-title">' + esc(title) + '</div>' +
         '<div class="sn-meta">' + esc(fmtTime(e.startsAt)) + (e.location ? " · " + esc(String(e.location).replace(/\s*\n\s*/g, ", ")) : "") + '</div>' +
-        slot(e, past) + (e.venue === "home" ? refSlot(e, past) : "") + '</div></li>';
+        slot(e, past) + (refsOn && e.venue === "home" ? refSlot(e, past) : "") + '</div></li>';
     });
     if (month) html += "</ul>";
     $("#list").innerHTML = html;
@@ -136,18 +152,26 @@
     return h;
   }
 
+  // These are a family's own name and a snack note, prefilled from localStorage —
+  // never credentials. Password managers (Bitwarden/1Password/LastPass) still see
+  // a text field named "name" and eagerly offer to fill it, popping a vault menu
+  // over the parent's form. Turn native autofill off (we prefill ourselves) and
+  // tell each extension to skip the field. `autocomplete="off"` on the <form> too.
+  var NOFILL = 'autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false" ' +
+    'data-bwignore data-1p-ignore data-lpignore="true" data-form-type="other"';
+
   function form(e, role) {
     if (role === "ref") {
       var rs = e.referee, rname = (rs && rs.name) || savedName("ref");
-      return '<form class="sn-form sn-ref" data-uid="' + esc(e.uid) + '" data-role="ref">' +
-        '<input type="text" name="name" maxlength="60" placeholder="Referee\'s full name" value="' + esc(rname) + '" autocomplete="name" required>' +
+      return '<form class="sn-form sn-ref" data-uid="' + esc(e.uid) + '" data-role="ref" autocomplete="off">' +
+        '<input type="text" name="name" maxlength="60" placeholder="Referee\'s full name" value="' + esc(rname) + '" ' + NOFILL + ' required>' +
         '<div class="acts"><button class="btn sm" type="submit">' + (rs ? "Save" : "Volunteer") + '</button>' +
         '<button class="btn ghost sm" type="button" data-act="cancel" data-role="ref">Cancel</button></div></form>';
     }
     var s = e.signup, name = (s && s.name) || savedName("snack"), note = (s && s.note) || "";
-    return '<form class="sn-form" data-uid="' + esc(e.uid) + '" data-role="snack">' +
-      '<input type="text" name="name" maxlength="60" placeholder="Your name (e.g. Sholly family)" value="' + esc(name) + '" autocomplete="name" required>' +
-      '<input type="text" name="note" maxlength="140" placeholder="What you\'ll bring (optional)" value="' + esc(note) + '">' +
+    return '<form class="sn-form" data-uid="' + esc(e.uid) + '" data-role="snack" autocomplete="off">' +
+      '<input type="text" name="name" maxlength="60" placeholder="Your name (e.g. Sholly family)" value="' + esc(name) + '" ' + NOFILL + ' required>' +
+      '<input type="text" name="note" maxlength="140" placeholder="What you\'ll bring (optional)" value="' + esc(note) + '" ' + NOFILL + '>' +
       '<div class="acts"><button class="btn sm" type="submit">' + (s ? "Save" : "Sign up") + '</button>' +
       '<button class="btn ghost sm" type="button" data-act="cancel" data-role="snack">Cancel</button></div></form>';
   }

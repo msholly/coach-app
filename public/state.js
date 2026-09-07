@@ -19,7 +19,10 @@ var SaveState = (function () {
       practice: [], practiceRun: { startedAt: 0, idx: 0, marks: [] }, lineup: null,
       played: {},  // career periods played, by player id — drives "rotate this responsibility"
       kept: {},    // career periods in goal, by player id
-      game: { us: 0, them: 0, period: 1, secs: 600, running: false, onBreak: false, playerStats: {} }
+      // test:true = a practice game that never reaches the archive or the career
+      // ledgers. A brand-new install starts in practice until a scheduled game is
+      // linked. sched = the linked GameChanger event {uid,opponent,startsAt,venue}.
+      game: { us: 0, them: 0, period: 1, secs: 600, running: false, onBreak: false, playerStats: {}, test: true, sched: null }
     };
   }
 
@@ -33,6 +36,10 @@ var SaveState = (function () {
     if (!s.posTotals) s.posTotals = {};
     if (!s.practiceRun) s.practiceRun = { startedAt: 0, idx: 0, marks: [] };
     if (s.game && !s.game.goals) s.game.goals = [];
+    // Grandfather: any game saved before the practice/test flag existed was a real
+    // game and must keep counting. Only games built after this default to practice.
+    if (s.game && s.game.test === undefined) s.game.test = false;
+    if (s.game && s.game.sched === undefined) s.game.sched = null;
     if (s.lineup) {
       if (s.lineup.keeper == null) s.lineup.keeper = true;   // every pre-format lineup was U8
       LineupCore.ensureApp(s.lineup);

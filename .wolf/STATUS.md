@@ -2,11 +2,31 @@
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
 > Update this file at the end of every work phase so the next `/clear` resumes in 1 read.
-> Last updated: 2026-09-05
+> Last updated: 2026-09-07
 
 ---
 
 ## ✅ Done
+
+### Game Day pulls from the schedule + practice/test games — 2026-09-07
+- **"This game" picker (Roster tab, `#gameSel`):** 🧪 Practice / an optgroup of upcoming scheduled games (from the GC feed) / ✏️ manual real game. `loadSchedule()` fills it from `GET /api/team/:id/schedule`; `renderGamePicker()`/`pickGame()` in `public/app.js`.
+- **Linking a scheduled game** sets `g.sched={uid,opponent,startsAt,venue}`, pre-fills Home/Away (still overridable — feed lags), shows the opponent on the scoreboard (`#themName`), and makes the game **count**. `queueGameRow` now archives the opponent (was always NULL).
+- **Practice/test game (the default when unlinked):** `state.game.test` gates `logEvent` (outbox only — local undo/goals still work), `queueGameRow`, `queueAppearances`, `commitGame` (career ledgers). Nothing reaches the archive or fairness ledgers. Amber 🧪 badge (`#practiceTag`) on Game Day. Existing games grandfathered as counting (state.js fixup).
+- Files: `public/index.html`, `public/app.js`, `public/state.js`, `public/app.css`, `public/sw.js` (**v18** — shell files changed). Tests: `test/state.test.mjs` +3, suite **149/149**. Headless E2E (scratchpad `verify-testgame.mjs`, /api stubbed so no D1 writes): **16/16** — practice writes 0 rows, linked game archives with opponent+venue.
+- NOT committed. Static-only change (no worker.js edit, no new migration — `games.opponent` already existed). Deploy = redeploy static assets; the picker's scheduled-games list only appears once a team's GC feed is connected (📅 Connect schedule).
+
+### Referee sign-up per-team toggle (BU5 = off) — 2026-09-07
+- `migrations/0003_ref_toggle.sql`: `snack_boards.referees_enabled` (DEFAULT 1). Coach's per-team switch.
+- `PUT /api/team/:id/snacks {referees:bool}` (mints board if absent); `getTeamSnacks`+`getBoard` return `referees`; `putRef` → 403 when off. **Off only hides the slot — `ref_signups` rows are kept**, so flipping back on restores volunteers.
+- Coach 🙋 **Referee sign-up: On/Off** button (Roster tab); parents' board hides the slot on `d.referees===false`.
+- Tests +3 → **Suite 149/149.** VM render check confirms the slot disappears when off. NOT committed; **0003 NOT migrated** yet.
+
+### Coach snack link + refresh games + parent-referee sign-up — 2026-09-07
+- **Always-visible snack link (coach):** `showSnackLink()`/`refreshSnackLink()` GET the board on load and render "Open the board ↗" under the 🍊 button — no tap-to-copy needed. `public/app.js`.
+- **Refresh games (coach ↻ button):** `loadCalendar(raw,{fresh})` sets `cache:"no-cache"` → Cloudflare revalidates with GC and **replaces the shared cache the parents' board reads**, so a just-changed game shows immediately (not just for the coach). `GET /schedule?fresh=1` + games count; button on the Roster tab toasts the count.
+- **Parent-referee sign-up (parents' board, home games only):** `migrations/0002_referees.sql` (`ref_signups`, claim-guarded like snacks, name-only). Public routes `PUT/DELETE /api/snacks/:board/:uid/ref` (venue=home enforced, same rate-limit key). `getBoard` adds a `referee` field per home event. `snacks.js` role-aware (snack + ref slots), `snacks.css` `.sn-ref` neutral chip, `snacks.html` copy updated.
+- Tests: `test/snacks.test.mjs` +5 (referee home-only, claim guard, validation/rate-limit, refresh count). **Suite 146/146.**
+- NOT committed. **`0002_referees.sql` NOT migrated** on local/remote D1 yet (user runs it). Not live-screenshotted (needs the migration + a live GC feed).
 
 ### Snack sign-up (parents' public board) — 2026-09-05
 - `migrations/0001_snacks.sql`: `snack_boards` (one public link per team), `snack_signups` (one family per game, claim-guarded), `teams.ics_url` (per-team GameChanger feed).
@@ -23,9 +43,10 @@
 **Goal:** ship the snack sign-up — migrate, deploy, hand the link to parents.
 
 ### Acceptance criteria
-1. `npm run db:migrate:local` and `npm run db:migrate` apply `0001_snacks.sql` (ALTER + 2 CREATE) without error.
-2. Coach taps 🍊 on the Roster tab, gets `/snacks#b=…`, parents can take/change/give back a game on their phones.
-3. If a second team is added: 📅 Connect schedule with that team's GC "Subscribe to calendar" link; its board shows only its games.
+1. `npm run db:migrate:local` and `npm run db:migrate` apply `0001_snacks.sql`, `0002_referees.sql` AND `0003_ref_toggle.sql` without error.
+2. Coach taps 🍊 on the Roster tab, gets `/snacks#b=…`, parents can take/change/give back a game AND volunteer to referee home games on their phones. Coach can turn referee sign-up off (BU5) with 🙋 — the slot hides, volunteers are kept.
+3. Coach ↻ Refresh games pulls the latest GC schedule immediately (bypasses the 30-min cache) and the parents' board reflects it.
+4. If a second team is added: 📅 Connect schedule with that team's GC "Subscribe to calendar" link; its board shows only its games.
 
 ### Files to create / edit
 | Type | File | Content |
@@ -39,7 +60,7 @@
 - Games only (practices skipped); feed = `teams.ics_url` else `GC_ICS_URL`.
 
 ### Open decisions
-- Should the coach app show the signup list (a card on Season or Roster)? API exists; UI deferred.
+- Should the coach app show the signup list (a card on Season or Roster)? API exists; UI deferred. (2026-09-07: coach now gets an always-visible "Open the board ↗" link under the 🍊 button — GET /snacks on load, `showSnackLink()`/`refreshSnackLink()` in app.js. Full who-signed-up list still deferred.)
 - Snacks at practices too? Currently excluded.
 
 ---

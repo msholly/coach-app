@@ -33,10 +33,20 @@
               <label class="fld" for="teamName">Team name</label>
               <input type="text" id="teamName" placeholder="e.g. Thunder" autocomplete="off">
             </div>
-            <!-- Set by hand for now. GameChanger publishes no write API and only an
-                 unofficial read one, so nothing auto-fills this today. -->
+            <!-- Pick the scheduled GameChanger game you're about to coach: it sets
+                 Home/Away + opponent and makes the game count toward season stats.
+                 "Practice" (or no pick) = a test game that never touches the archive
+                 or fairness ledgers. Home/Away stays hand-overridable — the GC feed
+                 lags edits, so the manual value wins. -->
+            <div style="flex:2 1 200px">
+              <label class="fld" for="gameSel">This game</label>
+              <select id="gameSel">
+                <option value="__test">🧪 Practice — won't count</option>
+                <option value="__manual">✏️ Real game — not on the list</option>
+              </select>
+            </div>
             <div style="flex:1 1 110px">
-              <label class="fld" for="venue">This game</label>
+              <label class="fld" for="venue">Home / Away</label>
               <select id="venue">
                 <option value="home">Home</option>
                 <option value="away">Away</option>
@@ -51,6 +61,7 @@
             <button class="btn ghost" id="snackBtn" data-act="snack-link" style="flex:0 0 auto" title="A public page where parents pick a game to bring snacks" hidden>🍊 Snack sign-up link</button>
             <button class="btn ghost" id="gcBtn" data-act="gc-link" style="flex:0 0 auto" title="Paste this team's GameChanger calendar link so the snack sign-up shows its games" hidden>📅 Connect schedule</button>
             <button class="btn ghost" id="refreshGamesBtn" data-act="refresh-games" style="flex:0 0 auto" title="Pull the latest games from GameChanger now, skipping the 30-minute cache" hidden>↻ Refresh games</button>
+            <button class="btn ghost" id="refToggleBtn" data-act="ref-toggle" aria-pressed="true" style="flex:0 0 auto" title="Show or hide the volunteer-referee sign-up on the parents' board. BU5 teams have no referees. Hiding keeps who already signed up." hidden>🙋 Referee sign-up: On</button>
           </div>
           <div class="hint no-print" id="snackLinkOut" style="margin:-6px 0 12px;word-break:break-all" hidden></div>
           <ul class="roster" id="rosterList"></ul>
@@ -181,6 +192,7 @@
             <div class="sb-top">
               <span class="pill caps period-pill" id="periodPill">Period 1</span>
               <button class="pill caps pnext no-print" id="periodPlus" data-act="period-next" title="End this period">Period +</button>
+              <span class="pill caps practice-tag" id="practiceTag" title="This is a practice/test game — nothing here reaches season stats" hidden>🧪 Practice</span>
               <span class="sp"></span>
               <span class="ends tnum" id="endsAt"></span>
             </div>
@@ -197,7 +209,7 @@
                 <div class="sc-btns"><button data-act="score" data-side="us" data-d="-1">−</button><button data-act="score" data-side="us" data-d="1">+</button></div>
               </div>
               <div class="team them">
-                <div class="t-row"><span class="nm">Visitors</span><span class="val tnum" id="themScore">0</span></div>
+                <div class="t-row"><span class="nm" id="themName">Visitors</span><span class="val tnum" id="themScore">0</span></div>
                 <div class="sc-btns"><button data-act="score" data-side="them" data-d="-1">−</button><button data-act="score" data-side="them" data-d="1">+</button></div>
               </div>
             </div>

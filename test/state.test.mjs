@@ -29,6 +29,29 @@ test("defaults: a fresh season is playable and its ledgers are empty", () => {
   assert.equal(d.game.running, false);
 });
 
+test("defaults: a fresh install starts in practice (a test game that won't count)", () => {
+  const d = S.defaults();
+  assert.equal(d.game.test, true, "no scheduled game linked yet — nothing should reach season stats");
+  assert.equal(d.game.sched, null);
+});
+
+test("fixup: a game saved before the practice flag is grandfathered as a real (counting) game", () => {
+  const old = { roster: [{ id: "p0", name: "A", present: true }], game: { us: 2, them: 1, period: 3 } };
+  S.fixup(old);
+  assert.equal(old.game.test, false, "an existing game was real and must keep counting");
+  assert.equal(old.game.sched, null);
+});
+
+test("fixup: an explicit test/sched flag on a game is never overwritten", () => {
+  const practice = { roster: [], game: { test: true, sched: { uid: "u1", opponent: "Rockets" } } };
+  S.fixup(practice);
+  assert.equal(practice.game.test, true);
+  assert.deepEqual(practice.game.sched, { uid: "u1", opponent: "Rockets" });
+  const real = { roster: [], game: { test: false } };
+  S.fixup(real);
+  assert.equal(real.game.test, false);
+});
+
 test("defaults: each call is a fresh object, not a shared one", () => {
   const a = S.defaults(), b = S.defaults();
   a.roster[0].present = false; a.played.x = 5;

@@ -3023,6 +3023,55 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-09-05T22:05:00.000Z"
+    },
+    {
+      "id": "bug-181",
+      "timestamp": "2026-09-07T19:06:43.600Z",
+      "error_message": "Creating a new team pre-populated the roster with the other team's players",
+      "file": "public/app.js",
+      "root_cause": "New team started with an empty (never-persisted) storage key, so SaveState.load() fell through to defaults(), whose seed roster is 8 named players. Also gave every un-persisted team identical seed ids (seed0..seed7).",
+      "fix": "In the teamSel \"__new\" handler, write a blank doc (SaveState.defaults() with roster:[]) to the new team's key before switchTeam(), so boot() loads the empty doc instead of the seed defaults.",
+      "tags": [
+        "team",
+        "localStorage",
+        "roster",
+        "defaults",
+        "multi-team"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-09-07T19:06:43.601Z"
+    },
+    {
+      "id": "bug-182",
+      "timestamp": "2026-09-07T19:40:06.128Z",
+      "error_message": "Bitwarden/password managers eagerly offer to fill the snack sign-up name/note fields",
+      "file": "public/snacks.js",
+      "root_cause": "Inputs used autocomplete=\"name\" and a field named \"name\", which trips password managers' identity/username autofill heuristics and pops a vault menu over a public parent form.",
+      "fix": "form() now emits autocomplete=\"off\" on the <form> and a shared NOFILL attr set on every input (autocomplete=off, data-bwignore, data-1p-ignore, data-lpignore=\"true\", data-form-type=\"other\"). Names are prefilled from localStorage so native autofill was redundant anyway.",
+      "tags": [
+        "snacks",
+        "autofill",
+        "bitwarden",
+        "password-manager",
+        "forms",
+        "accessibility"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-09-07T19:40:06.147Z"
+    },
+    {
+      "id": "bug-183",
+      "timestamp": "2026-09-07T20:10:00.000Z",
+      "error_message": "Headless verify crashed: Cannot read properties of null (reading 'game') when reading localStorage[KEY] right after boot",
+      "file": "scratchpad/verify-testgame.mjs",
+      "root_cause": "A freshly-booted team writes NOTHING to localStorage[KEY] until the first save(). Opening the app on a new token only detects backend + pulls; with pull() stubbed to 404 nothing persists, so JSON.parse(localStorage.getItem(KEY)) is null before any user action.",
+      "fix": "Read the fresh-state facts from the DOM (the #gameSel value reflects g.test via renderGamePicker); only read localStorage[KEY] AFTER the first build-lineup click, which calls save().",
+      "tags": ["headless", "puppeteer", "localStorage", "boot", "verification", "test-game"],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-09-07T20:10:00.000Z"
     }
   ]
 }

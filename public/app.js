@@ -260,6 +260,8 @@
   var tally=LineupCore.tally;   // extracted behind node --test (plan item 4)
   function commitGame(lu){
     if(!lu) return;
+    // A practice/test game never banks minutes into the career fairness ledgers.
+    if(state.game && state.game.test) return;
     Object.keys(lu.actual||{}).forEach(function(id){ state.played[id]=(state.played[id]||0)+lu.actual[id]; });
     Object.keys(lu.gkActual||{}).forEach(function(id){ state.kept[id]=(state.kept[id]||0)+lu.gkActual[id]; });
   }
@@ -327,6 +329,11 @@
       g.recent=[]; g.stoppedAt=0;                     // Fix-a-mistake starts clean each game
       g.goals=[];                                     // every goal this game, newest first
       g.onBreak=false; g.breakKind=null; g.playerStats={};
+      // Carry the coach's game link (test / linked schedule game) forward as the
+      // pre-game intent. But a scheduled game that is already over drops back to
+      // practice, so the next game doesn't silently re-count last week's opponent.
+      if(g.sched && g.sched.startsAt && g.sched.startsAt < nowMs()-4*3600e3){ g.test=true; g.sched=null; }
+      if(g.test===undefined) g.test=true;
       stopTicker();
     }
     save(); renderLineup(); renderGame();
@@ -671,6 +678,9 @@
     $("#usName").textContent=state.team||"Our team";
     $("#usVenue").textContent=state.venue==="away"?"Away":"Home";
     $("#usScore").textContent=g.us; $("#themScore").textContent=g.them;
+    var tn=$("#themName"); if(tn) tn.textContent=(g.sched&&g.sched.opponent)||"Visitors";
+    var pt=$("#practiceTag"); if(pt) pt.hidden=!g.test;
+    renderGamePicker();
     var pill=$("#periodPill");
     pill.classList.toggle("break",!!g.onBreak);
     pill.textContent = gameOver() ? "Full time"
@@ -1874,6 +1884,7 @@
     else if(act==="snack-link"){ copySnackLink(); }
     else if(act==="gc-link"){ connectSchedule(); }
     else if(act==="refresh-games"){ refreshGames(); }
+    else if(act==="ref-toggle"){ toggleReferees(); }
     else if(act==="card"){ openCard(t.dataset.id); }
     else if(act==="card-close"){ closeCard(); }
     else if(act==="card-num"){ cardSetNum(); }
@@ -1936,6 +1947,7 @@
   });
   $("#seasonName").addEventListener("input",function(e){ state.season=e.target.value; save(); });
   $("#venue").addEventListener("change",function(e){ state.venue=e.target.value; save(); renderGame(); });
+  $("#gameSel").addEventListener("change",function(e){ pickGame(e.target.value); });
   $$("#periods,#onfield,#minsper").forEach(function(el){ el.addEventListener("change",syncSettings); });
   $("#format").addEventListener("change",function(e){
     state.format=e.target.value;
@@ -2499,14 +2511,18 @@
   // (a goal record keeps it, and a timestamp correction names it).
   function logEvent(kind,detail,playerId){
     var g=state.game; if(!g||!g.gid) return null;
-    var ob=loadOutbox();
     var evId="e"+nowMs().toString(36)+Math.floor(Math.random()*1679616).toString(36);
-    ob.events.push({
-      id:evId,
-      game_id:g.gid, at:nowMs(), period:g.period, secs:Math.max(0,g.secs), kind:kind,
-      player_id:playerId||null, detail:detail?JSON.stringify(detail):null
-    });
-    saveOutbox(ob);
+    // A practice game keeps its evId and its local Fix-a-mistake / goal list (the
+    // clock, subs and scoring all work) but nothing is queued for the archive.
+    if(!g.test){
+      var ob=loadOutbox();
+      ob.events.push({
+        id:evId,
+        game_id:g.gid, at:nowMs(), period:g.period, secs:Math.max(0,g.secs), kind:kind,
+        player_id:playerId||null, detail:detail?JSON.stringify(detail):null
+      });
+      saveOutbox(ob);
+    }
     // Mirror the undoable kinds for Fix a mistake (3a). Corrections never
     // re-enter the undo list, or undoing an undo would ping-pong forever.
     var undoable = !(detail&&detail.correction) &&
@@ -2523,10 +2539,13 @@
   }
   function queueGameRow(){
     var g=state.game, lu=state.lineup; if(!g.gid||!g.startedAt||!lu) return;
+    if(g.test) return;   // practice game — never archived
     var ob=loadOutbox();
     ob.games[g.gid]={
       id:g.gid, team_id:TEAM||"", season:state.season||"", format:state.format||"u8",
-      started_at:g.startedAt, ended_at:g.endedAt||null, opponent:null,
+      // Opponent comes from the linked schedule game; venue stays the manual value
+      // (the GC feed lags, so Home/Away on the Roster tab is authoritative).
+      started_at:g.startedAt, ended_at:g.endedAt||null, opponent:(g.sched&&g.sched.opponent)||null,
       venue:state.venue==="away"?"away":"home",
       us:g.us, them:g.them, periods:lu.Q, onfield:lu.N, minsper:lu.minsper
     };
@@ -2536,6 +2555,7 @@
   // planned future is redrawn freely and must never be archived.
   function queueAppearances(upto){
     var g=state.game, lu=state.lineup; if(!g.gid||!g.startedAt||!lu) return;
+    if(g.test) return;   // practice game — no appearances reach the season ledger
     var ob=loadOutbox();
     LineupCore.appearanceRows(lu,g.gid,upto).forEach(function(r){
       ob.appearances[r.game_id+"|"+r.player_id+"|"+r.period+"|"+r.pos]=r;
@@ -2622,10 +2642,11 @@
     if(!arch.games.length){ box.innerHTML='<div class="empty">No games archived yet — a game lands here at kickoff.</div>'; return; }
     box.innerHTML=arch.games.map(function(g){
       var d=new Date(g.started_at), when=(d.getMonth()+1)+"/"+d.getDate();
+      var vs=g.opponent?(" "+(g.venue==="away"?"@":"vs")+" "+g.opponent):"";
       var open=(g.id===openGid);
       return '<div class="logrow'+(open?" open":"")+'">'
         +'<button class="loghead" data-act="log-game" data-gid="'+g.id+'">'
-        +'<span>'+when+(g.ended_at?"":" · in progress")+'</span><b class="tnum">'+g.us+"–"+g.them+"</b></button>"
+        +'<span>'+when+esc(vs)+(g.ended_at?"":" · in progress")+'</span><b class="tnum">'+g.us+"–"+g.them+"</b></button>"
         +(open?logEventsHtml(arch,g):"")
         +"</div>";
     }).join("");
@@ -2709,8 +2730,16 @@
     return url;
   }
 
-  // On team load, show the link if the board is already minted — no tap needed.
-  // GET never mints, so a team without a board stays quiet until the coach taps 🍊.
+  // Reflect the per-team referee-signup toggle on its button.
+  function applyRefToggle(on){
+    var b=$("#refToggleBtn"); if(!b) return;
+    b.setAttribute("aria-pressed", on?"true":"false");
+    b.textContent="🙋 Referee sign-up: "+(on?"On":"Off");
+  }
+
+  // On team load, show the link if the board is already minted — no tap needed —
+  // and sync the referee toggle. GET never mints, so a team without a board stays
+  // quiet until the coach taps 🍊 (referees defaults on for a team with no board).
   async function refreshSnackLink(){
     if(!BACKEND||!TEAM) return;
     try{
@@ -2718,7 +2747,25 @@
       if(!r.ok) return;
       var j=await r.json();
       if(j&&j.board) showSnackLink(j.board);
+      if(j&&typeof j.referees==="boolean") applyRefToggle(j.referees);
     }catch(e){}
+  }
+
+  // The coach's per-team switch for the parents' referee sign-up. Off only hides
+  // the slot; the server keeps who already volunteered, so it can come back on.
+  async function toggleReferees(){
+    if(!BACKEND||!TEAM){ toast("Referee sign-up needs the backend — this device is running local-only."); return; }
+    var b=$("#refToggleBtn");
+    var next=!(b&&b.getAttribute("aria-pressed")==="true");
+    if(b) b.disabled=true;
+    try{
+      var r=await authFetch("/api/team/"+encodeURIComponent(TEAM)+"/snacks",{method:"PUT",headers:{"content-type":"application/json",accept:"application/json"},body:JSON.stringify({referees:next})});
+      if(!r.ok){ toast("Couldn't update referee sign-up ("+r.status+")"); return; }
+      var j=await r.json();
+      applyRefToggle(!!j.referees);
+      toast(j.referees?"Referee sign-up is on — home games show it":"Referee sign-up is off — hidden on the parents' board");
+    }catch(e){ toast("Couldn't update referee sign-up"); }
+    finally{ if(b) b.disabled=false; }
   }
 
   // The parents' snack board is a second link, minted once per team on the
@@ -2777,9 +2824,80 @@
       if(r.status===501){ toast("No schedule connected yet — tap 📅 Connect schedule first"); return; }
       if(!r.ok){ toast("Couldn't refresh the games ("+r.status+")"); return; }
       var j=await r.json();
+      calGames=(j.events||[]).filter(function(e){ return e.uid && e.venue && e.startsAt; });
+      renderGamePicker();
       toast("Games refreshed — "+(j.games||0)+" on the schedule");
     }catch(e){ toast("Couldn't refresh the games"); }
     finally{ if(btn) btn.disabled=false; }
+  }
+
+  /* ---------- schedule → Game Day ----------
+     The coach picks the GameChanger game they're about to coach; it stamps venue +
+     opponent and makes the game count. No pick (or "Practice") = a test game that
+     never touches the archive or fairness ledgers. calGames is the feed's games
+     (venue set = a real match, not a practice/event), nearest date first. */
+  var calGames=[];
+
+  async function loadSchedule(){
+    if(!BACKEND||!TEAM) return;
+    try{
+      var r=await fetch("/api/team/"+encodeURIComponent(TEAM)+"/schedule",{headers:{accept:"application/json"}});
+      if(!r.ok) return;   // 501 = no feed connected yet; picker keeps Practice/Manual only
+      var j=await r.json();
+      calGames=(j.events||[]).filter(function(e){ return e.uid && e.venue && e.startsAt; });
+      renderGamePicker();
+    }catch(e){}
+  }
+
+  function gameLabel(e){
+    var d=new Date(e.startsAt), md=(d.getMonth()+1)+"/"+d.getDate();
+    var t=d.toLocaleTimeString([], {hour:"numeric", minute:"2-digit"});
+    var vs=e.venue==="away"?"@":"vs";
+    return md+" "+t+" "+vs+" "+(e.opponent||"TBD");
+  }
+
+  // Rebuild the option list (Practice + upcoming/recent games + Manual) and select
+  // the option that matches the current game's link.
+  function renderGamePicker(){
+    var sel=$("#gameSel"); if(!sel) return;
+    var g=state.game;
+    var now=nowMs();
+    // Show games from ~1 day ago onward so a same-day or slightly-past game is still pickable.
+    var upcoming=calGames.filter(function(e){ return e.startsAt >= now-24*3600e3; });
+    // If the linked game is older than that window, keep it in the list so it stays selectable.
+    if(g.sched && g.sched.uid && !upcoming.some(function(e){return e.uid===g.sched.uid;})){
+      upcoming=[{uid:g.sched.uid, startsAt:g.sched.startsAt, opponent:g.sched.opponent, venue:g.sched.venue}].concat(upcoming);
+    }
+    var opts='<option value="__test">🧪 Practice — won\'t count</option>';
+    if(upcoming.length){
+      opts+='<optgroup label="Scheduled games (counts)">';
+      upcoming.forEach(function(e){ opts+='<option value="'+esc(e.uid)+'">'+esc(gameLabel(e))+'</option>'; });
+      opts+='</optgroup>';
+    }
+    opts+='<option value="__manual">✏️ Real game — not on the list</option>';
+    sel.innerHTML=opts;
+    sel.value = g.test ? "__test" : (g.sched&&g.sched.uid ? g.sched.uid : "__manual");
+    if(!sel.value) sel.value="__test";   // linked game no longer in the feed → fall back visibly
+  }
+
+  // Apply the coach's pick to the CURRENT game. Linking a scheduled game pre-fills
+  // Home/Away (still hand-overridable) and the opponent, and makes the game count.
+  function pickGame(v){
+    var g=state.game;
+    if(v==="__test"){ g.test=true; g.sched=null; }
+    else if(v==="__manual"){ g.test=false; g.sched=null; }
+    else {
+      var e=calGames.find(function(x){return x.uid===v;}) || (g.sched&&g.sched.uid===v?g.sched:null);
+      if(!e){ g.test=true; g.sched=null; }
+      else {
+        g.test=false;
+        g.sched={uid:e.uid, opponent:e.opponent||null, startsAt:e.startsAt||0, venue:e.venue||null};
+        if(e.venue==="home"||e.venue==="away"){ state.venue=e.venue; var vs=$("#venue"); if(vs) vs.value=e.venue; }
+      }
+    }
+    save(); renderGame();
+    toast(g.test?"Practice game — this won't affect season stats"
+      :(g.sched?"Linked "+gameLabel(g.sched)+" — this game counts":"Real game — this game counts"));
   }
 
   // Format-dependent chrome outside the render cycle: header line, the U8-only
@@ -2813,6 +2931,7 @@
     var snackBtn=$("#snackBtn"); if(snackBtn) snackBtn.hidden=false;
     var gcBtn=$("#gcBtn"); if(gcBtn) gcBtn.hidden=false;
     var refreshBtn=$("#refreshGamesBtn"); if(refreshBtn) refreshBtn.hidden=false;
+    var refToggle=$("#refToggleBtn"); if(refToggle) refToggle.hidden=false;
 
     if(!TEAM){
       var last=null; try{ last=localStorage.getItem(BASE+":lastTeam"); }catch(e){}
@@ -2846,6 +2965,7 @@
     await pull();
     renderLog();
     refreshSnackLink();          // show the parents' link straight away if the board is already minted
+    loadSchedule();              // fill the Game Day picker with this team's scheduled games
     window.addEventListener("online", function(){ if(isDirty()) push(); else { pull(); flushOutbox(); } });
     document.addEventListener("visibilitychange", function(){ if(document.visibilityState==="visible"){ if(isDirty()) push(); else pull(); } });
   }

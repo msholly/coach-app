@@ -1036,3 +1036,31 @@ Reset moved from `.gd-controls` onto the clock row as an edge tag mirroring Edit
 
 | Time | Action | File(s) | Outcome | ~Tokens |
 |------|--------|---------|---------|--------|
+
+## Session: 2026-09-07 11:38
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-09-07 11:38
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 11:45 | Coach-side always-visible snack link: showSnackLink()/refreshSnackLink() GET board on load, render "Open the board ↗" + raw URL under 🍊 button (no tap to copy needed) | public/app.js | 141/141 tests pass | ~1200 |
+| 12:20 | Refresh-games button: loadCalendar(raw,{fresh}) uses `cache:"no-cache"` (CF revalidates+replaces shared cache → parents' board fresh); getSchedule ?fresh=1 + games count; coach ↻ button toasts count | src/worker.js, public/index.html, public/app.js | verified via CF docs | ~2500 |
+| 12:35 | Parent-referee signup on parents' board (home games only, free-form full name): 0002_referees.sql ref_signups table; putRef/deleteRef public routes at /api/snacks/:board/:uid/ref (claim-guarded, venue=home enforced); getBoard adds `referee` per home event; snacks.js role-aware (slot/refSlot/form), snacks.css .sn-ref chip; +5 tests | migrations/0002_referees.sql, src/worker.js, public/snacks.{js,css,html}, test/snacks.test.mjs | 146/146 tests pass | ~5000 |
+
+## Session: 2026-09-07 12:01
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 12:06 | new team pre-populated roster (defaults seed) → seed blank doc on create; added Delete-team option; player-delete already team-scoped | public/app.js | fixed, 13/14 test files pass (snacks pre-existing fail) | ~9k |
+| 12:55 | Coach per-team referee toggle (BU5 has no refs): 0003_ref_toggle.sql adds snack_boards.referees_enabled; PUT /api/team/:id/snacks {referees} (mints if absent); getTeamSnacks+getBoard expose `referees`; putRef 403 when off; snacks.js hides ref slot when d.referees===false (rows kept); coach 🙋 toggle button in app.js/index.html; +3 tests | migrations/0003_ref_toggle.sql, src/worker.js, public/{snacks.js,app.js,index.html}, test/snacks.test.mjs | 149/149 tests pass; VM render check confirms hide-on-off | ~7k |
+| 13:10 | Stop password managers autofilling snack/ref inputs (bug-182): form() emits autocomplete=off + NOFILL attrs (data-bwignore, data-1p-ignore, data-lpignore, data-form-type=other); dropped autocomplete=name (names prefilled from localStorage) | public/snacks.js | logged bug-182 | ~1.5k |
+| 13:20 | Parents' board header restructure: season → green kicker (#kicker), "N games" → #sub, open count → right-column badge (#openBadge, "N snacks open" / green "All snacks covered"). Flex 2-col .sn-head | public/snacks.{html,css,js} | VM render check confirms layout | ~2k |
+
+## Session: 2026-09-07 12:27
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 20:05 | Game Day pulls from the GC schedule + practice/test games. Added a "This game" picker (Practice / scheduled games / manual) on the Roster tab; linking a scheduled game sets venue+opponent and makes the game count. Unlinked = a test game (default) that writes nothing to the archive or career ledgers. | public/index.html, public/app.js, public/state.js, public/app.css, public/sw.js (v18) | Suite 149/149; +3 state tests (14/14); headless E2E 16/16 (practice writes 0 rows, linked game archives with opponent) | ~9k |

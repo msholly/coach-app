@@ -145,6 +145,8 @@
 
 - `0000_init.sql` — Full D1 schema, applied via `wrangler d1 migrations apply` (db:migrate[:local]). Idempotent (all CREATE TABLE IF NOT EXISTS); folds in the former 0001 venue / 0002 pass_hash ALTERs. (~1174 tok)
 - `0001_snacks.sql` — Snack sign-up tables (snack_boards: one public link per team; snack_signups: one family per game, claim-guarded) + `teams.ics_url` for a per-team GameChanger feed. Plain ALTER, tracked by the migrations framework. (~420 tok)
+- `0002_referees.sql` — ref_signups table: one volunteer referee per HOME game on the same public board as snacks, claim-guarded like snack_signups (name-only, no note). Worker enforces venue="home". (~180 tok)
+- `0003_ref_toggle.sql` — `snack_boards.referees_enabled` (INTEGER DEFAULT 1): coach's per-team switch for referee sign-up (BU5 = off). Off hides the slot on the parents' board; ref_signups rows are kept. (~120 tok)
 
 ## public/
 

@@ -18,10 +18,15 @@ function makeD1() {
         async first() {
           const a = this.args;
           if (/FROM teams WHERE id = \?/.test(sql)) { const r = teams.get(a[0]); return r ? { ...r } : null; }
+          if (/SELECT id, referees_enabled FROM snack_boards WHERE team_id = \?/.test(sql)) {
+            for (const b of boards.values()) if (b.team_id === a[0]) return { id: b.id, referees_enabled: b.referees_enabled };
+            return null;
+          }
           if (/SELECT id FROM snack_boards WHERE team_id = \?/.test(sql)) {
             for (const b of boards.values()) if (b.team_id === a[0]) return { id: b.id };
             return null;
           }
+          if (/SELECT team_id, referees_enabled FROM snack_boards WHERE id = \?/.test(sql)) { const b = boards.get(a[0]); return b ? { team_id: b.team_id, referees_enabled: b.referees_enabled } : null; }
           if (/SELECT team_id FROM snack_boards WHERE id = \?/.test(sql)) { const b = boards.get(a[0]); return b ? { team_id: b.team_id } : null; }
           throw new Error("unmodelled first(): " + sql);
         },
@@ -40,8 +45,12 @@ function makeD1() {
           const a = this.args;
           if (/INSERT INTO snack_boards/.test(sql)) {
             for (const b of boards.values()) if (b.team_id === a[1]) return { success: true, meta: { changes: 0 } };
-            boards.set(a[0], { id: a[0], team_id: a[1], created_at: a[2] });
+            boards.set(a[0], { id: a[0], team_id: a[1], created_at: a[2], referees_enabled: 1 });
             return { success: true, meta: { changes: 1 } };
+          }
+          if (/UPDATE snack_boards SET referees_enabled = \? WHERE team_id = \?/.test(sql)) {
+            let n = 0; for (const b of boards.values()) if (b.team_id === a[1]) { b.referees_enabled = a[0]; n++; }
+            return { success: true, meta: { changes: n } };
           }
           if (/INSERT INTO snack_signups/.test(sql)) {
             const [board_id, event_uid, name, note, claim, created_at] = a;
@@ -145,13 +154,13 @@ test("the coach mints one board per team; a second POST returns the same link", 
   assert.equal(b1, b2);
   assert.notEqual(b1, TEAM, "the board is never the team token");
   const s = await (await worker.fetch(req(`/api/team/${TEAM}/snacks`), e)).json();
-  assert.deepEqual(s, { board: b1, signups: [] });
+  assert.deepEqual(s, { board: b1, referees: true, signups: [] });
 });
 
 test("before minting, the coach view reports no board", async () => {
   const e = env();
   const s = await (await worker.fetch(req(`/api/team/${TEAM}/snacks`), e)).json();
-  assert.deepEqual(s, { board: null, signups: [] });
+  assert.deepEqual(s, { board: null, referees: true, signups: [] });
 });
 
 test("a board for a team that does not exist is a 404", async () => {
@@ -441,6 +450,54 @@ test("referee writes are validated at the boundary and rate limited on the same 
   }), e);
   assert.equal(r.status, 429);
   assert.deepEqual(keys, [`snack:${b}:203.0.113.9`]);
+});
+
+const setRefs = (e, team, referees) => worker.fetch(jsonReq(`/api/team/${team}/snacks`, "PUT", { referees }), e);
+
+test("the coach can turn referee sign-up off; the board hides it and keeps who volunteered", async () => {
+  const e = env();
+  const b = await mint(e);
+  await putRef(e, b, "g2@gc.com", { name: "Jordan Sholly", claim: CLAIM_A });
+
+  // Default on: the coach view and the board both show it.
+  assert.equal((await (await worker.fetch(req(`/api/team/${TEAM}/snacks`), e)).json()).referees, true);
+  assert.equal((await board(e, b)).referees, true);
+  assert.equal((await board(e, b)).events[1].referee.name, "Jordan Sholly");
+
+  // Turn it off (BU5): the board no longer surfaces the slot, but the row stays.
+  const off = await setRefs(e, TEAM, false);
+  assert.equal(off.status, 200);
+  assert.deepEqual(await off.json(), { board: b, referees: false });
+  const d = await board(e, b);
+  assert.equal(d.referees, false);
+  assert.equal(d.events[1].referee, null, "the slot is hidden");
+  assert.equal(e.DB._refs.size, 1, "but the ref_signups row is preserved");
+
+  // Turn it back on: the same volunteer reappears — nothing was deleted.
+  assert.equal((await setRefs(e, TEAM, true)).status, 200);
+  assert.equal((await board(e, b)).events[1].referee.name, "Jordan Sholly");
+});
+
+test("with referee sign-up off, a referee write is refused rather than creating a row", async () => {
+  const e = env();
+  const b = await mint(e);
+  await setRefs(e, TEAM, false);
+  const r = await putRef(e, b, "g2@gc.com", { name: "Nope", claim: CLAIM_A });
+  assert.equal(r.status, 403);
+  assert.equal((await r.json()).error, "referees_disabled");
+  assert.equal(e.DB._refs.size, 0);
+});
+
+test("the toggle mints a board if there isn't one, and requires a boolean", async () => {
+  const e = env();
+  assert.equal((await setRefs(e, TEAM, "yes")).status, 400, "referees must be a boolean");
+  const r = await setRefs(e, TEAM, false);        // no board minted yet
+  assert.equal(r.status, 200);
+  const j = await r.json();
+  assert.match(j.board, /^[A-Za-z0-9_-]{8,64}$/, "a board was minted so the setting persists");
+  assert.equal(j.referees, false);
+  assert.equal((await (await worker.fetch(req(`/api/team/${TEAM}/snacks`), e)).json()).referees, false);
+  assert.equal((await setRefs(e, "zzz999yyy888", true)).status, 404, "a team that does not exist is a 404");
 });
 
 test("refresh games: ?fresh=1 still returns the schedule and a games count", async () => {

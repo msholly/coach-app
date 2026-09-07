@@ -101,6 +101,7 @@ export default {
         // The coach's side of the snack board: mint the link, see who signed up, clear a slot.
         if (kind === "snacks" && !sub && request.method === "GET") return getTeamSnacks(db, id);
         if (kind === "snacks" && !sub && request.method === "POST") return createSnackBoard(db, id);
+        if (kind === "snacks" && !sub && request.method === "PUT") return setRefereesEnabled(db, id, request);
         if (kind === "snacks" && sub && request.method === "DELETE") return coachClearSnack(db, id, sub);
         return json({ error: "method_not_allowed" }, 405);
       }
@@ -742,11 +743,35 @@ async function snackGames(env, teamRow) {
   return { calendar: cal.calendar, events: cal.events.filter((e) => e.uid && e.venue && e.startsAt) };
 }
 
-// GET /api/team/:id/snacks — the coach's view: board id (null until minted) and every signup.
+// GET /api/team/:id/snacks — the coach's view: board id (null until minted),
+// whether referee sign-up is on for this team, and every snack signup.
 async function getTeamSnacks(db, teamId) {
-  const board = await boardOf(db, teamId);
+  const row = await db.prepare("SELECT id, referees_enabled FROM snack_boards WHERE team_id = ?").bind(teamId).first();
+  const board = row ? row.id : null;
+  const referees = row ? row.referees_enabled !== 0 : true;   // default on for a team with no board yet
   const signups = board ? (await listSignups(db, board)).map(publicSignup) : [];
-  return json({ board, signups });
+  return json({ board, referees, signups });
+}
+
+// PUT /api/team/:id/snacks  { referees: true|false } — the coach's per-team toggle
+// for referee sign-up. Off only hides the slot on the parents' board; ref_signups
+// rows stay, so turning it back on restores who had volunteered. Mints the board
+// if there isn't one yet, so the setting persists before the link is shared.
+async function setRefereesEnabled(db, teamId, request) {
+  const b = await readJson(request);
+  if (b === null) return json({ error: "invalid_json_body" }, 400);
+  if (typeof b.referees !== "boolean") return json({ error: "referees_bool_required" }, 400);
+  const team = await db.prepare("SELECT 1 FROM teams WHERE id = ?").bind(teamId).first();
+  if (!team) return json({ error: "not_found" }, 404);
+  let board = await boardOf(db, teamId);
+  if (!board) {
+    await db.prepare(
+      "INSERT INTO snack_boards (id, team_id, created_at) VALUES (?, ?, ?) ON CONFLICT(team_id) DO NOTHING"
+    ).bind(newToken(), teamId, Date.now()).run();
+    board = await boardOf(db, teamId);
+  }
+  await db.prepare("UPDATE snack_boards SET referees_enabled = ? WHERE team_id = ?").bind(b.referees ? 1 : 0, teamId).run();
+  return json({ board, referees: b.referees });
 }
 
 // POST /api/team/:id/snacks — mint the board once. Repeat calls return the
@@ -776,8 +801,9 @@ async function coachClearSnack(db, teamId, uid) {
 
 // GET /api/snacks/:board[?claim=] — the whole board: every game, who has it.
 async function getBoard(env, db, board, url) {
-  const row = await db.prepare("SELECT team_id FROM snack_boards WHERE id = ?").bind(board).first();
+  const row = await db.prepare("SELECT team_id, referees_enabled FROM snack_boards WHERE id = ?").bind(board).first();
   if (!row) return json({ error: "not_found" }, 404);
+  const refsOn = row.referees_enabled !== 0;   // BU5 (or any team) can turn the referee slot off
 
   // Team name and season come from the doc, and nothing else does: the doc is
   // the coach's, and the roster/lineup inside it is none of the board's business.
@@ -794,12 +820,12 @@ async function getBoard(env, db, board, url) {
 
   const claim = url.searchParams.get("claim") || "";
   const by = new Map((await listSignups(db, board)).map((r) => [r.event_uid, r]));
-  const refBy = new Map((await listRefs(db, board)).map((r) => [r.event_uid, r]));
+  // Rows are read even when the toggle is off so nothing is lost; they are just
+  // not surfaced. A volunteer referee is a home-game thing only.
+  const refBy = refsOn ? new Map((await listRefs(db, board)).map((r) => [r.event_uid, r])) : new Map();
   const events = cal.events.map((e) => {
     const s = by.get(e.uid);
-    // A volunteer referee is a home-game thing only. Off a home game the slot
-    // never renders, so there is nothing to report even if a stray row existed.
-    const ref = e.venue === "home" ? refBy.get(e.uid) : null;
+    const ref = refsOn && e.venue === "home" ? refBy.get(e.uid) : null;
     return {
       uid: e.uid, startsAt: e.startsAt, endsAt: e.endsAt, summary: e.summary,
       location: e.location, opponent: e.opponent, venue: e.venue,
@@ -807,7 +833,7 @@ async function getBoard(env, db, board, url) {
       referee: ref ? { ...publicRef(ref), mine: !!claim && ref.claim === claim } : null,
     };
   });
-  return json({ team: name, season, calendar: cal.calendar, events });
+  return json({ team: name, season, calendar: cal.calendar, referees: refsOn, events });
 }
 
 // PUT /api/snacks/:board/:uid  { name, note?, claim }
@@ -873,8 +899,9 @@ async function putRef(env, db, board, uid, request) {
   const name = str(b.name, MAX_NAME).trim();
   if (!name) return json({ error: "name_required" }, 400);
 
-  const row = await db.prepare("SELECT team_id FROM snack_boards WHERE id = ?").bind(board).first();
+  const row = await db.prepare("SELECT team_id, referees_enabled FROM snack_boards WHERE id = ?").bind(board).first();
   if (!row) return json({ error: "not_found" }, 404);
+  if (row.referees_enabled === 0) return json({ error: "referees_disabled" }, 403);
   const team = await db.prepare("SELECT ics_url FROM teams WHERE id = ?").bind(row.team_id).first();
   const cal = await snackGames(env, team);
   if (cal.err) return cal.err;
