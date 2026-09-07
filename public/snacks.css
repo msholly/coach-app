@@ -51,6 +51,15 @@
 .sn-when{color:var(--muted); font-size:12px; flex-basis:100%}
 .sn-open{color:var(--muted); font-size:13px; font-style:italic}
 
+/* referee slot: a second row under the snack slot, home games only. Set off with
+   a dashed rule and a small label, and a neutral chip so it reads apart from the
+   orange snack chip. */
+.sn-slot.sn-ref{margin-top:6px; padding-top:8px; border-top:1px dashed var(--line)}
+.sn-tag{flex-basis:100%; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--muted)}
+.sn-ref .sn-who{background:color-mix(in srgb,var(--ink) 9%,transparent); color:var(--ink)}
+.sn-ref .sn-who .you{background:var(--ink)}
+.sn-form.sn-ref{border-top:1px dashed var(--line); padding-top:10px}
+
 /* inline sign-up form */
 .sn-form{margin-top:10px; display:flex; flex-direction:column; gap:8px}
 .sn-form input[type=text]{padding:10px 12px; font-size:16px}   /* 16px: iOS does not zoom */

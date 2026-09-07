@@ -96,7 +96,7 @@ export default {
         if (kind === "push" && !sub && request.method === "POST") return postPushSub(db, id, request);
         if (kind === "push" && !sub && request.method === "DELETE") return deletePushSub(db, id, request);
         if (kind === "alarm" && !sub && request.method === "POST") return postAlarm(env, id, request);
-        if (kind === "schedule" && !sub && request.method === "GET") return getSchedule(env, db, id);
+        if (kind === "schedule" && !sub && request.method === "GET") return getSchedule(env, db, id, url);
         if (kind === "schedule" && !sub && request.method === "PUT") return putScheduleFeed(env, db, id, request);
         // The coach's side of the snack board: mint the link, see who signed up, clear a slot.
         if (kind === "snacks" && !sub && request.method === "GET") return getTeamSnacks(db, id);
@@ -105,14 +105,16 @@ export default {
         return json({ error: "method_not_allowed" }, 405);
       }
 
-      // /api/snacks/:board[/:uid] — the parents' side. NOT behind gate(): the
-      // board id is its own capability, deliberately separate from the team's.
-      const m3 = path.match(/^\/api\/snacks\/([^/]+)(?:\/([^/]+))?$/);
+      // /api/snacks/:board[/:uid[/ref]] — the parents' side. NOT behind gate():
+      // the board id is its own capability, deliberately separate from the team's.
+      // A trailing /ref selects the referee slot; anything else is the snack slot.
+      const m3 = path.match(/^\/api\/snacks\/([^/]+)(?:\/([^/]+)(?:\/(ref))?)?$/);
       if (m3) {
         const board = decodeURIComponent(m3[1]);
         if (!ID_RE.test(board)) return json({ error: "bad_board_id" }, 400);
         const db = dbOf(env);
         const uid = m3[2] ? decodeURIComponent(m3[2]) : null;
+        const isRef = m3[3] === "ref";
         if (!uid && request.method === "GET") return getBoard(env, db, board, url);
         if (uid && (request.method === "PUT" || request.method === "DELETE")) {
           // A public write path. Per board AND caller, so one household's
@@ -122,8 +124,8 @@ export default {
             const { success } = await env.LOGIN_LIMIT.limit({ key: "snack:" + board + ":" + ip });
             if (!success) return json({ error: "too_many_attempts" }, 429, { "retry-after": "60" });
           }
-          if (request.method === "PUT") return putSignup(env, db, board, uid, request);
-          return deleteSignup(db, board, uid, request);
+          if (request.method === "PUT") return isRef ? putRef(env, db, board, uid, request) : putSignup(env, db, board, uid, request);
+          return isRef ? deleteRef(db, board, uid, request) : deleteSignup(db, board, uid, request);
         }
         return json({ error: "method_not_allowed" }, 405);
       }
@@ -601,7 +603,11 @@ export function parseIcsEvents(text) {
 // every caller (the coach's schedule, the parents' snack board) answers the
 // same way when the feed is missing, misconfigured or down.
 // `raw` is the feed URL to use — the team's own when it has one, else the global secret.
-async function loadCalendar(raw) {
+// `fresh` (the coach's "Refresh games") forces a revalidation with the origin: on a
+// change GC's copy is downloaded and Cloudflare's shared cache is UPDATED, so the
+// parents' board — which reads the same cached URL — is current on its next load,
+// not just this request. The Node test stub ignores fetch options, so tests are unaffected.
+async function loadCalendar(raw, { fresh = false } = {}) {
   if (!raw) return { err: json({ error: "schedule_unavailable", reason: "no schedule feed connected" }, 501) };
   // The subscribe link is handed out as webcal://; that scheme means nothing to fetch().
   const target = String(raw).trim().replace(/^webcal:\/\//i, "https://");
@@ -610,9 +616,11 @@ async function loadCalendar(raw) {
   let res;
   try {
     // GC advertises X-PUBLISHED-TTL of 5h; 30 min keeps a same-day change visible
-    // without hammering their endpoint on every page load.
+    // without hammering their endpoint on every page load. `cache:"no-cache"`
+    // revalidates and replaces that cached entry when the coach asks for fresh.
     res = await fetch(target, {
       headers: { accept: "text/calendar" },
+      cache: fresh ? "no-cache" : undefined,
       cf: { cacheTtl: 1800, cacheEverything: true },
     });
   } catch (err) {
@@ -627,7 +635,7 @@ async function loadCalendar(raw) {
   return { calendar: name ? unescapeIcs(name.trim()) : null, events: parseIcsEvents(text) };
 }
 
-async function getSchedule(env, db, id) {
+async function getSchedule(env, db, id, url) {
   // gate() lets a nonexistent team through (link is the credential on an unlocked
   // team), and the GC feed is a single global secret — so without this check
   // ANY well-formed id would be served the coach's family schedule. Require the
@@ -636,10 +644,13 @@ async function getSchedule(env, db, id) {
   const team = await db.prepare("SELECT ics_url FROM teams WHERE id = ?").bind(id).first();
   if (!team) return json({ error: "not_found" }, 404);
 
-  const cal = await loadCalendar(feedOf(team, env));
+  // ?fresh=1 is the coach's "Refresh games": skip the 30-min cache and pull GC now.
+  const fresh = (url && url.searchParams.get("fresh")) === "1";
+  const cal = await loadCalendar(feedOf(team, env), { fresh });
   if (cal.err) return cal.err;
   return json(
-    { calendar: cal.calendar, events: cal.events, source: team.ics_url ? "team" : "global" },
+    { calendar: cal.calendar, events: cal.events, source: team.ics_url ? "team" : "global",
+      games: cal.events.filter((e) => e.venue).length },
     200,
     // The response body is the coach's own schedule — never a shared/public cache.
     { "cache-control": "private, max-age=300" }
@@ -702,6 +713,7 @@ const MAX_NAME = 60, MAX_NOTE = 140;
 
 const newToken = () => b64uEncode(crypto.getRandomValues(new Uint8Array(16)));
 const publicSignup = (r) => ({ uid: r.event_uid, name: r.name, note: r.note || null, at: r.created_at });
+const publicRef = (r) => ({ name: r.name, at: r.created_at });
 
 async function boardOf(db, teamId) {
   const r = await db.prepare("SELECT id FROM snack_boards WHERE team_id = ?").bind(teamId).first();
@@ -711,6 +723,13 @@ async function boardOf(db, teamId) {
 async function listSignups(db, board) {
   const rs = await db.prepare(
     "SELECT event_uid, name, note, claim, created_at FROM snack_signups WHERE board_id = ? ORDER BY created_at"
+  ).bind(board).all();
+  return rs.results || [];
+}
+
+async function listRefs(db, board) {
+  const rs = await db.prepare(
+    "SELECT event_uid, name, claim, created_at FROM ref_signups WHERE board_id = ? ORDER BY created_at"
   ).bind(board).all();
   return rs.results || [];
 }
@@ -775,12 +794,17 @@ async function getBoard(env, db, board, url) {
 
   const claim = url.searchParams.get("claim") || "";
   const by = new Map((await listSignups(db, board)).map((r) => [r.event_uid, r]));
+  const refBy = new Map((await listRefs(db, board)).map((r) => [r.event_uid, r]));
   const events = cal.events.map((e) => {
     const s = by.get(e.uid);
+    // A volunteer referee is a home-game thing only. Off a home game the slot
+    // never renders, so there is nothing to report even if a stray row existed.
+    const ref = e.venue === "home" ? refBy.get(e.uid) : null;
     return {
       uid: e.uid, startsAt: e.startsAt, endsAt: e.endsAt, summary: e.summary,
       location: e.location, opponent: e.opponent, venue: e.venue,
       signup: s ? { ...publicSignup(s), mine: !!claim && s.claim === claim } : null,
+      referee: ref ? { ...publicRef(ref), mine: !!claim && ref.claim === claim } : null,
     };
   });
   return json({ team: name, season, calendar: cal.calendar, events });
@@ -828,6 +852,55 @@ async function deleteSignup(db, board, uid, request) {
   if (!CLAIM_RE.test(claim)) return json({ error: "bad_claim" }, 400);
   const res = await db.prepare(
     "DELETE FROM snack_signups WHERE board_id = ? AND event_uid = ? AND claim = ?"
+  ).bind(board, uid, claim).run();
+  if ((res.meta ? res.meta.changes : 0) === 0) return json({ error: "not_found" }, 404);
+  return json({ ok: true });
+}
+
+/* ---------- parent-referee sign-up (home games only) ----------
+   Same board, same claim-ownership model as snacks, but the value is a single
+   free-form full name and the slot exists only for home games. A game that is
+   away, or not on the schedule at all, is refused here so no junk row is born. */
+
+// PUT /api/snacks/:board/:uid/ref  { name, claim } — volunteer to referee a home
+// game, or change your own name. Someone else's slot is a 409, like snacks.
+async function putRef(env, db, board, uid, request) {
+  if (!UID_RE.test(uid)) return json({ error: "bad_uid" }, 400);
+  const b = await readJson(request);
+  if (b === null) return json({ error: "invalid_json_body" }, 400);
+  const claim = String(b.claim || "");
+  if (!CLAIM_RE.test(claim)) return json({ error: "bad_claim" }, 400);
+  const name = str(b.name, MAX_NAME).trim();
+  if (!name) return json({ error: "name_required" }, 400);
+
+  const row = await db.prepare("SELECT team_id FROM snack_boards WHERE id = ?").bind(board).first();
+  if (!row) return json({ error: "not_found" }, 404);
+  const team = await db.prepare("SELECT ics_url FROM teams WHERE id = ?").bind(row.team_id).first();
+  const cal = await snackGames(env, team);
+  if (cal.err) return cal.err;
+  const game = cal.events.find((e) => e.uid === uid);
+  if (!game) return json({ error: "unknown_game" }, 404);
+  if (game.venue !== "home") return json({ error: "not_home" }, 400);
+
+  const res = await db.prepare(
+    "INSERT INTO ref_signups (board_id, event_uid, name, claim, created_at) VALUES (?, ?, ?, ?, ?) " +
+    "ON CONFLICT(board_id, event_uid) DO UPDATE SET name = excluded.name " +
+    "WHERE ref_signups.claim = excluded.claim"
+  ).bind(board, uid, name, claim, Date.now()).run();
+  if ((res.meta ? res.meta.changes : 0) === 0) return json({ error: "taken" }, 409);
+  return json({ ok: true });
+}
+
+// DELETE /api/snacks/:board/:uid/ref  { claim } — step down. Only the claim that
+// signed up can; anything else reads as "no such signup".
+async function deleteRef(db, board, uid, request) {
+  if (!UID_RE.test(uid)) return json({ error: "bad_uid" }, 400);
+  const b = await readJson(request);
+  if (b === null) return json({ error: "invalid_json_body" }, 400);
+  const claim = String(b.claim || "");
+  if (!CLAIM_RE.test(claim)) return json({ error: "bad_claim" }, 400);
+  const res = await db.prepare(
+    "DELETE FROM ref_signups WHERE board_id = ? AND event_uid = ? AND claim = ?"
   ).bind(board, uid, claim).run();
   if ((res.meta ? res.meta.changes : 0) === 0) return json({ error: "not_found" }, 404);
   return json({ ok: true });

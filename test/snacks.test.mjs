@@ -7,10 +7,10 @@ import worker from "../src/worker.js";
    snack_signups) and models the two conditional writes the worker relies on —
    the claim-guarded UPSERT and the claim-guarded DELETE — through meta.changes. */
 function makeD1() {
-  const teams = new Map(), boards = new Map(), signups = new Map();
+  const teams = new Map(), boards = new Map(), signups = new Map(), refs = new Map();
   const skey = (b, u) => b + "|" + u;
   return {
-    _teams: teams, _boards: boards, _signups: signups,
+    _teams: teams, _boards: boards, _signups: signups, _refs: refs,
     prepare(sql) {
       return {
         sql, args: [],
@@ -28,6 +28,10 @@ function makeD1() {
         async all() {
           if (/FROM snack_signups WHERE board_id = \?/.test(sql)) {
             const out = [...signups.values()].filter((r) => r.board_id === this.args[0]).sort((x, y) => x.created_at - y.created_at);
+            return { results: out.map((r) => ({ ...r })) };
+          }
+          if (/FROM ref_signups WHERE board_id = \?/.test(sql)) {
+            const out = [...refs.values()].filter((r) => r.board_id === this.args[0]).sort((x, y) => x.created_at - y.created_at);
             return { results: out.map((r) => ({ ...r })) };
           }
           throw new Error("unmodelled all(): " + sql);
@@ -64,6 +68,20 @@ function makeD1() {
           if (/DELETE FROM snack_signups WHERE board_id = \? AND event_uid = \?/.test(sql)) {
             const had = signups.delete(skey(a[0], a[1]));
             return { success: true, meta: { changes: had ? 1 : 0 } };
+          }
+          if (/INSERT INTO ref_signups/.test(sql)) {
+            const [board_id, event_uid, name, claim, created_at] = a;
+            const k = skey(board_id, event_uid), ex = refs.get(k);
+            if (!ex) { refs.set(k, { board_id, event_uid, name, claim, created_at }); return { success: true, meta: { changes: 1 } }; }
+            if (ex.claim !== claim) return { success: true, meta: { changes: 0 } };
+            Object.assign(ex, { name });
+            return { success: true, meta: { changes: 1 } };
+          }
+          if (/DELETE FROM ref_signups WHERE board_id = \? AND event_uid = \? AND claim = \?/.test(sql)) {
+            const k = skey(a[0], a[1]), ex = refs.get(k);
+            if (!ex || ex.claim !== a[2]) return { success: true, meta: { changes: 0 } };
+            refs.delete(k);
+            return { success: true, meta: { changes: 1 } };
           }
           throw new Error("unmodelled run(): " + sql);
         },
@@ -361,4 +379,75 @@ test("the feed URL never leaks through the team document route", async () => {
   const body = await (await worker.fetch(req(`/api/team/${TEAM}`), e)).text();
   assert.equal(body.includes("SECRET_A"), false);
   assert.equal(body.includes("ics_url"), false);
+});
+
+/* ---------- parent-referee sign-up (home games only) ----------
+   In the fixture ICS, g1 is "@ Jones" (away) and g2 is "vs DiRocco" (home). */
+const putRef = (e, b, uid, body) => worker.fetch(jsonReq(`/api/snacks/${b}/${uid}/ref`, "PUT", body), e);
+
+test("a parent volunteers to referee a home game; the board shows who, and `mine` per claim", async () => {
+  const e = env();
+  const b = await mint(e);
+  const r = await putRef(e, b, "g2@gc.com", { name: "Jordan Sholly", claim: CLAIM_A });
+  assert.equal(r.status, 200);
+
+  const mine = await board(e, b, CLAIM_A);
+  assert.equal(mine.events[1].referee.name, "Jordan Sholly");
+  assert.equal(mine.events[1].referee.mine, true);
+  assert.equal(typeof mine.events[1].referee.at, "number");
+  assert.equal("claim" in mine.events[1].referee, false, "the claim never leaves the server");
+
+  const other = await board(e, b, CLAIM_B);
+  assert.equal(other.events[1].referee.name, "Jordan Sholly");
+  assert.equal(other.events[1].referee.mine, false);
+  // The referee slot only exists for home games; the snack slot is independent.
+  assert.equal(other.events[1].signup, null, "refereeing does not take the snack slot");
+});
+
+test("a referee cannot be signed up for an away game or a practice", async () => {
+  const e = env();
+  const b = await mint(e);
+  assert.equal((await putRef(e, b, "g1@gc.com", { name: "Someone", claim: CLAIM_A })).status, 400, "g1 is away");
+  assert.equal((await (await putRef(e, b, "g1@gc.com", { name: "Someone", claim: CLAIM_A })).json()).error, "not_home");
+  assert.equal((await putRef(e, b, "p1@gc.com", { name: "Someone", claim: CLAIM_A })).status, 404, "a practice is not a game");
+  assert.equal((await board(e, b)).events[0].referee, null, "an away game never carries a referee slot");
+});
+
+test("a home game's referee slot is claim-guarded like snacks: 409, change, give back", async () => {
+  const e = env();
+  const b = await mint(e);
+  await putRef(e, b, "g2@gc.com", { name: "Jordan Sholly", claim: CLAIM_A });
+  assert.equal((await putRef(e, b, "g2@gc.com", { name: "Someone Else", claim: CLAIM_B })).status, 409);
+
+  assert.equal((await putRef(e, b, "g2@gc.com", { name: "Jordan A. Sholly", claim: CLAIM_A })).status, 200);
+  assert.equal((await board(e, b)).events[1].referee.name, "Jordan A. Sholly");
+
+  assert.equal((await worker.fetch(jsonReq(`/api/snacks/${b}/g2@gc.com/ref`, "DELETE", { claim: CLAIM_B }), e)).status, 404, "someone else's slot looks like none");
+  assert.equal((await worker.fetch(jsonReq(`/api/snacks/${b}/g2@gc.com/ref`, "DELETE", { claim: CLAIM_A }), e)).status, 200);
+  assert.equal((await board(e, b)).events[1].referee, null);
+});
+
+test("referee writes are validated at the boundary and rate limited on the same key as snacks", async () => {
+  const e = env();
+  const b = await mint(e);
+  assert.equal((await putRef(e, b, "g2@gc.com", { name: "", claim: CLAIM_A })).status, 400, "a name is required");
+  assert.equal((await putRef(e, b, "g2@gc.com", { name: "X", claim: "short" })).status, 400, "a claim has a minimum length");
+
+  const keys = [];
+  e.LOGIN_LIMIT = { async limit({ key }) { keys.push(key); return { success: false }; } };
+  const r = await worker.fetch(req(`/api/snacks/${b}/g2@gc.com/ref`, {
+    method: "PUT", headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.9" },
+    body: JSON.stringify({ name: "X", claim: CLAIM_A }),
+  }), e);
+  assert.equal(r.status, 429);
+  assert.deepEqual(keys, [`snack:${b}:203.0.113.9`]);
+});
+
+test("refresh games: ?fresh=1 still returns the schedule and a games count", async () => {
+  const e = env();
+  const r = await worker.fetch(req(`/api/team/${TEAM}/schedule?fresh=1`), e);
+  assert.equal(r.status, 200);
+  const d = await r.json();
+  assert.equal(d.games, 2, "two games have a venue; the practice does not");
+  assert.deepEqual(d.events.map((x) => x.uid), ["g1@gc.com", "g2@gc.com", "p1@gc.com"]);
 });

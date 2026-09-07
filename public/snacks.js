@@ -10,7 +10,7 @@
     var m = (location.hash || "").match(/[#&]b=([A-Za-z0-9_-]{8,64})/);
     return m ? m[1] : null;
   })();
-  var KEY_CLAIM = "snack:claim", KEY_NAME = "snack:name";
+  var KEY_CLAIM = "snack:claim", KEY_NAME = "snack:name", KEY_REFNAME = "snack:refname";
 
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
   function toast(msg) {
@@ -39,8 +39,11 @@
     }
     return c;
   }
-  function savedName() { try { return localStorage.getItem(KEY_NAME) || ""; } catch (e) { return ""; } }
-  function rememberName(n) { try { localStorage.setItem(KEY_NAME, n); } catch (e) {} }
+  // Snack signups read "Sholly family"; a referee is a person's full name. Keep
+  // the two remembered names apart so one doesn't prefill the other's field.
+  function nameKey(role) { return role === "ref" ? KEY_REFNAME : KEY_NAME; }
+  function savedName(role) { try { return localStorage.getItem(nameKey(role)) || ""; } catch (e) { return ""; } }
+  function rememberName(role, n) { try { localStorage.setItem(nameKey(role), n); } catch (e) {} }
 
   var DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   var MON = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -51,7 +54,8 @@
   }
   function fmtDay(ms) { var d = new Date(ms); return MON3[d.getMonth()] + " " + d.getDate(); }
 
-  var data = null, editing = null;   // editing = uid whose inline form is open
+  var data = null, editing = null;   // editing = { uid, role } whose inline form is open
+  function isEditing(uid, role) { return editing && editing.uid === uid && editing.role === role; }
 
   function status(msg) {
     var s = $("#status"); s.hidden = !msg; s.textContent = msg || "";
@@ -75,8 +79,11 @@
     var d = data; if (!d) return;
     $("#teamName").textContent = d.team || d.calendar || "Team snacks";
     document.title = (d.team ? d.team + " · " : "") + "Snack sign-up";
-    var open = d.events.filter(function (e) { return !e.signup && e.startsAt > Date.now(); }).length;
-    $("#sub").textContent = (d.season ? d.season + " · " : "") + d.events.length + " games · " + open + " still open";
+    var now0 = Date.now();
+    var open = d.events.filter(function (e) { return !e.signup && e.startsAt > now0; }).length;
+    var refsNeeded = d.events.filter(function (e) { return e.venue === "home" && !e.referee && e.startsAt > now0; }).length;
+    $("#sub").textContent = (d.season ? d.season + " · " : "") + d.events.length + " games · " + open + " snacks open" +
+      (refsNeeded ? " · " + refsNeeded + " ref" + (refsNeeded === 1 ? "" : "s") + " needed" : "");
     $("#foot").hidden = false;
 
     var now = Date.now(), html = "", month = "";
@@ -91,82 +98,115 @@
         '<div class="sn-date"><span class="dow">' + DOW[dt.getDay()] + '</span><span class="day">' + dt.getDate() + '</span></div>' +
         '<div class="sn-body"><div class="sn-title">' + esc(title) + '</div>' +
         '<div class="sn-meta">' + esc(fmtTime(e.startsAt)) + (e.location ? " · " + esc(String(e.location).replace(/\s*\n\s*/g, ", ")) : "") + '</div>' +
-        slot(e, past) + '</div></li>';
+        slot(e, past) + (e.venue === "home" ? refSlot(e, past) : "") + '</div></li>';
     });
     if (month) html += "</ul>";
     $("#list").innerHTML = html;
-    var f = editing && $('.sn-game[data-uid="' + CSS.escape(editing) + '"] input[name=name]');
+    // One inline form is open at a time, so focus whichever just rendered.
+    var f = $("form.sn-form input[name=name]");
     if (f) f.focus();
   }
 
   function slot(e, past) {
-    if (editing === e.uid) return form(e);
+    if (isEditing(e.uid, "snack")) return form(e, "snack");
     var s = e.signup;
     if (!s) {
       if (past) return '<div class="sn-slot"><span class="sn-open">No snacks signed up</span></div>';
-      return '<div class="sn-slot"><button class="btn ghost sm" type="button" data-act="take">Sign up for snacks</button></div>';
+      return '<div class="sn-slot"><button class="btn ghost sm" type="button" data-act="take" data-role="snack">Sign up for snacks</button></div>';
     }
     var h = '<div class="sn-slot"><span class="sn-who">' + esc(s.name) + (s.mine ? ' <span class="you">you</span>' : "") + "</span>";
-    if (s.mine && !past) h += '<button class="btn ghost sm" type="button" data-act="edit">Change</button><button class="btn ghost sm" type="button" data-act="drop">Give it back</button>';
+    if (s.mine && !past) h += '<button class="btn ghost sm" type="button" data-act="edit" data-role="snack">Change</button><button class="btn ghost sm" type="button" data-act="drop" data-role="snack">Give it back</button>';
     if (s.note) h += '<span class="sn-note">' + esc(s.note) + "</span>";
     h += '<span class="sn-when">signed up ' + esc(fmtDay(s.at)) + "</span></div>";
     return h;
   }
 
-  function form(e) {
-    var s = e.signup, name = (s && s.name) || savedName(), note = (s && s.note) || "";
-    return '<form class="sn-form" data-uid="' + esc(e.uid) + '">' +
+  // Home games need a volunteer referee. Same take/change/give-back as snacks,
+  // but the value is one free-form full name and it only shows on home games.
+  function refSlot(e, past) {
+    if (isEditing(e.uid, "ref")) return form(e, "ref");
+    var s = e.referee;
+    if (!s) {
+      if (past) return '<div class="sn-slot sn-ref"><span class="sn-tag">Referee</span><span class="sn-open">No referee</span></div>';
+      return '<div class="sn-slot sn-ref"><span class="sn-tag">Referee</span><button class="btn ghost sm" type="button" data-act="take" data-role="ref">Volunteer to referee</button></div>';
+    }
+    var h = '<div class="sn-slot sn-ref"><span class="sn-tag">Referee</span><span class="sn-who">' + esc(s.name) + (s.mine ? ' <span class="you">you</span>' : "") + "</span>";
+    if (s.mine && !past) h += '<button class="btn ghost sm" type="button" data-act="edit" data-role="ref">Change</button><button class="btn ghost sm" type="button" data-act="drop" data-role="ref">Step down</button>';
+    h += '<span class="sn-when">volunteered ' + esc(fmtDay(s.at)) + "</span></div>";
+    return h;
+  }
+
+  function form(e, role) {
+    if (role === "ref") {
+      var rs = e.referee, rname = (rs && rs.name) || savedName("ref");
+      return '<form class="sn-form sn-ref" data-uid="' + esc(e.uid) + '" data-role="ref">' +
+        '<input type="text" name="name" maxlength="60" placeholder="Referee\'s full name" value="' + esc(rname) + '" autocomplete="name" required>' +
+        '<div class="acts"><button class="btn sm" type="submit">' + (rs ? "Save" : "Volunteer") + '</button>' +
+        '<button class="btn ghost sm" type="button" data-act="cancel" data-role="ref">Cancel</button></div></form>';
+    }
+    var s = e.signup, name = (s && s.name) || savedName("snack"), note = (s && s.note) || "";
+    return '<form class="sn-form" data-uid="' + esc(e.uid) + '" data-role="snack">' +
       '<input type="text" name="name" maxlength="60" placeholder="Your name (e.g. Sholly family)" value="' + esc(name) + '" autocomplete="name" required>' +
       '<input type="text" name="note" maxlength="140" placeholder="What you\'ll bring (optional)" value="' + esc(note) + '">' +
       '<div class="acts"><button class="btn sm" type="submit">' + (s ? "Save" : "Sign up") + '</button>' +
-      '<button class="btn ghost sm" type="button" data-act="cancel">Cancel</button></div></form>';
+      '<button class="btn ghost sm" type="button" data-act="cancel" data-role="snack">Cancel</button></div></form>';
   }
 
-  async function take(uid, name, note) {
+  function pathFor(uid, role) {
+    return "/api/snacks/" + encodeURIComponent(BOARD) + "/" + encodeURIComponent(uid) + (role === "ref" ? "/ref" : "");
+  }
+
+  async function take(uid, role, name, note) {
+    var body = role === "ref" ? { name: name, claim: claim() } : { name: name, note: note, claim: claim() };
     var r;
     try {
-      r = await fetch("/api/snacks/" + encodeURIComponent(BOARD) + "/" + encodeURIComponent(uid), {
+      r = await fetch(pathFor(uid, role), {
         method: "PUT", headers: { "content-type": "application/json", accept: "application/json" },
-        body: JSON.stringify({ name: name, note: note, claim: claim() }),
+        body: JSON.stringify(body),
       });
     } catch (e) { toast("No signal — try again in a moment"); return; }
-    if (r.status === 409) { toast("Someone just took that game — pick another"); editing = null; await load(); return; }
+    if (r.status === 409) { toast(role === "ref" ? "Someone just volunteered — pick another game" : "Someone just took that game — pick another"); editing = null; await load(); return; }
     if (r.status === 429) { toast("Too many tries — wait a minute"); return; }
     if (!r.ok) { toast("Couldn't save that (" + r.status + ")"); return; }
-    rememberName(name);
+    rememberName(role, name);
     editing = null;
-    toast("You're down for snacks — thank you!");
+    toast(role === "ref" ? "You're on to referee — thank you!" : "You're down for snacks — thank you!");
     await load();
   }
 
-  async function drop(uid) {
-    if (!window.confirm("Give this game back so another family can take it?")) return;
+  async function drop(uid, role) {
+    var msg = role === "ref" ? "Step down from refereeing this game?" : "Give this game back so another family can take it?";
+    if (!window.confirm(msg)) return;
     var r;
     try {
-      r = await fetch("/api/snacks/" + encodeURIComponent(BOARD) + "/" + encodeURIComponent(uid), {
+      r = await fetch(pathFor(uid, role), {
         method: "DELETE", headers: { "content-type": "application/json", accept: "application/json" },
         body: JSON.stringify({ claim: claim() }),
       });
     } catch (e) { toast("No signal — try again in a moment"); return; }
     if (!r.ok && r.status !== 404) { toast("Couldn't do that (" + r.status + ")"); return; }
-    toast("Game is open again");
+    toast(role === "ref" ? "Referee slot is open again" : "Game is open again");
     await load();
   }
 
   document.addEventListener("click", function (ev) {
     var b = ev.target.closest("[data-act]"); if (!b) return;
     var row = b.closest("[data-uid]"); var uid = row && row.dataset.uid; if (!uid) return;
-    var act = b.dataset.act;
-    if (act === "take" || act === "edit") { editing = uid; render(); }
+    var act = b.dataset.act, role = b.dataset.role || "snack";
+    if (act === "take" || act === "edit") { editing = { uid: uid, role: role }; render(); }
     else if (act === "cancel") { editing = null; render(); }
-    else if (act === "drop") { drop(uid); }
+    else if (act === "drop") { drop(uid, role); }
   });
   document.addEventListener("submit", function (ev) {
     var f = ev.target.closest("form.sn-form"); if (!f) return;
     ev.preventDefault();
-    var name = f.name.value.trim(), note = f.note.value.trim();
-    if (!name) { f.name.focus(); return; }
-    take(f.dataset.uid, name, note);
+    var role = f.dataset.role || "snack";
+    // Query the inputs explicitly: `f.name` is the form's own `name` property,
+    // not the control named "name", so reach the fields by selector.
+    var nameEl = f.querySelector('input[name=name]'), noteEl = f.querySelector('input[name=note]');
+    var name = nameEl ? nameEl.value.trim() : "", note = noteEl ? noteEl.value.trim() : "";
+    if (!name) { if (nameEl) nameEl.focus(); return; }
+    take(f.dataset.uid, role, name, note);
   });
   // Another parent may have signed up while this tab sat in the background.
   document.addEventListener("visibilitychange", function () { if (!document.hidden && data) load(); });

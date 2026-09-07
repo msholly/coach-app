@@ -1873,6 +1873,7 @@
     else if(act==="copy-link"){ copyTeamLink(); }
     else if(act==="snack-link"){ copySnackLink(); }
     else if(act==="gc-link"){ connectSchedule(); }
+    else if(act==="refresh-games"){ refreshGames(); }
     else if(act==="card"){ openCard(t.dataset.id); }
     else if(act==="card-close"){ closeCard(); }
     else if(act==="card-num"){ cardSetNum(); }
@@ -1951,13 +1952,40 @@
         if(!ok){ renderTeamSel(); return; }
         var tok=genToken(), l=loadTeamList();
         l.push({tok:tok,name:""}); saveTeamList(l);
+        // A brand-new team starts empty — seed its key with a blank doc so boot()
+        // loads that rather than falling back to defaults()' seed roster.
+        var blank=SaveState.defaults(); blank.roster=[];
+        try{ localStorage.setItem(BASE+":"+tok,JSON.stringify(blank)); }catch(err){}
         switchTeam(tok);
+      });
+      return;
+    }
+    if(v==="__del"){
+      var cur=loadTeamList().filter(function(t){ return t.tok===TEAM; })[0];
+      var nm=(cur&&cur.name)||"this team";
+      ask({title:"Delete "+nm+"?", body:"Removes it from this device — its roster, season and games here are erased. The share link stops working once no one has it. This can't be undone.",
+        ok:"Delete "+nm, danger:true}).then(function(ok){
+        if(!ok){ renderTeamSel(); return; }
+        deleteTeam(TEAM);
       });
       return;
     }
     if(v===TEAM) return;
     switchTeam(v);
   });
+
+  // Erase a team's local footprint and switch to whatever remains. Purely local —
+  // the backend copy (if any) is left alone; the link just goes unshared.
+  function deleteTeam(tok){
+    var l=loadTeamList().filter(function(t){ return t.tok!==tok; });
+    saveTeamList(l);
+    var k=BASE+":"+tok;
+    ["", ":meta", ":archive"].forEach(function(sfx){ try{ localStorage.removeItem(k+sfx); }catch(e){} });
+    var next=l[0]?l[0].tok:null;
+    try{ if(next) localStorage.setItem(BASE+":lastTeam",next); else localStorage.removeItem(BASE+":lastTeam"); }catch(e){}
+    setHashToken(next||"");
+    location.reload();
+  }
 
   function switchTeam(tok){
     try{ localStorage.setItem(BASE+":lastTeam",tok); }catch(err){}
@@ -2658,7 +2686,8 @@
     el.hidden=false;
     el.innerHTML=list.map(function(t){
       return '<option value="'+t.tok+'"'+(t.tok===TEAM?" selected":"")+'>'+esc(t.name||("Team "+t.tok.slice(0,6)))+'</option>';
-    }).join("")+'<option value="__new">＋ New team…</option>';
+    }).join("")+'<option value="__new">＋ New team…</option>'
+      +(list.length>1?'<option value="__del">🗑 Delete this team…</option>':"");
   }
 
   function copyTeamLink(){
@@ -2670,6 +2699,28 @@
     } else { toast("Copy this page's URL to share the team"); }
   }
 
+  // Render the always-visible parents' link under the button: an Open link the
+  // coach can tap straight through to the board, plus the raw URL to long-press.
+  function showSnackLink(board){
+    var out=$("#snackLinkOut"); if(!out||!board) return "";
+    var url=location.origin+"/snacks#b="+board;
+    out.innerHTML='Parents\' snack sign-up: <a href="'+esc(url)+'" target="_blank" rel="noopener">Open the board ↗</a><br><span style="color:var(--muted);font-size:.85em">'+esc(url)+'</span>';
+    out.hidden=false;
+    return url;
+  }
+
+  // On team load, show the link if the board is already minted — no tap needed.
+  // GET never mints, so a team without a board stays quiet until the coach taps 🍊.
+  async function refreshSnackLink(){
+    if(!BACKEND||!TEAM) return;
+    try{
+      var r=await authFetch("/api/team/"+encodeURIComponent(TEAM)+"/snacks",{headers:{accept:"application/json"}});
+      if(!r.ok) return;
+      var j=await r.json();
+      if(j&&j.board) showSnackLink(j.board);
+    }catch(e){}
+  }
+
   // The parents' snack board is a second link, minted once per team on the
   // server. It is never the team token — that one grants every write to the
   // doc, which is exactly what a link texted to twelve families must not.
@@ -2678,17 +2729,12 @@
   // over, so a visible link the coach can long-press is the reliable path.
   async function copySnackLink(){
     if(!BACKEND||!TEAM){ toast("The snack sign-up needs the backend — this device is running local-only."); return; }
-    var out=$("#snackLinkOut");
     try{
       var r=await authFetch("/api/team/"+encodeURIComponent(TEAM)+"/snacks",{method:"POST",headers:{accept:"application/json"}});
       if(!r.ok){ toast("Couldn't set up the snack sign-up ("+r.status+")"); return; }
       var j=await r.json();
       if(!j.board){ toast("Couldn't set up the snack sign-up"); return; }
-      var url=location.origin+"/snacks#b="+j.board;
-      if(out){
-        out.innerHTML='Parents\' snack sign-up: <a href="'+esc(url)+'" target="_blank" rel="noopener">'+esc(url)+'</a>';
-        out.hidden=false;
-      }
+      var url=showSnackLink(j.board);
       if(navigator.clipboard && navigator.clipboard.writeText){
         navigator.clipboard.writeText(url).then(
           function(){ toast("Snack sign-up link copied — text it to the parents"); },
@@ -2718,6 +2764,22 @@
       if(body.url===null) toast(j.connected?"This team's link removed — using the shared schedule":"Schedule disconnected");
       else toast("Schedule connected — "+(j.games||0)+" games for the snack sign-up");
     }catch(e){ toast("Couldn't save the schedule link"); }
+  }
+
+  // Force a fresh pull from GameChanger, skipping the 30-min cache, so a game the
+  // coach just changed shows on the parents' board right away. ?fresh=1 revalidates
+  // the feed with the origin AND replaces the shared cache the board reads.
+  async function refreshGames(){
+    if(!BACKEND||!TEAM){ toast("Refreshing games needs the backend — this device is running local-only."); return; }
+    var btn=$("#refreshGamesBtn"); if(btn) btn.disabled=true;
+    try{
+      var r=await authFetch("/api/team/"+encodeURIComponent(TEAM)+"/schedule?fresh=1",{headers:{accept:"application/json"}});
+      if(r.status===501){ toast("No schedule connected yet — tap 📅 Connect schedule first"); return; }
+      if(!r.ok){ toast("Couldn't refresh the games ("+r.status+")"); return; }
+      var j=await r.json();
+      toast("Games refreshed — "+(j.games||0)+" on the schedule");
+    }catch(e){ toast("Couldn't refresh the games"); }
+    finally{ if(btn) btn.disabled=false; }
   }
 
   // Format-dependent chrome outside the render cycle: header line, the U8-only
@@ -2750,6 +2812,7 @@
     if(copyBtn) copyBtn.hidden=false;
     var snackBtn=$("#snackBtn"); if(snackBtn) snackBtn.hidden=false;
     var gcBtn=$("#gcBtn"); if(gcBtn) gcBtn.hidden=false;
+    var refreshBtn=$("#refreshGamesBtn"); if(refreshBtn) refreshBtn.hidden=false;
 
     if(!TEAM){
       var last=null; try{ last=localStorage.getItem(BASE+":lastTeam"); }catch(e){}
@@ -2782,6 +2845,7 @@
     renderAuthBtn();
     await pull();
     renderLog();
+    refreshSnackLink();          // show the parents' link straight away if the board is already minted
     window.addEventListener("online", function(){ if(isDirty()) push(); else { pull(); flushOutbox(); } });
     document.addEventListener("visibilitychange", function(){ if(document.visibilityState==="visible"){ if(isDirty()) push(); else pull(); } });
   }
