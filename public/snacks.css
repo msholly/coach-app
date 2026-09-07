@@ -1,0 +1,57 @@
+/* The parents' snack board. Sits on top of app.css for the palette, buttons and
+   toasts; everything here is the list itself. Phone-first: this is opened from
+   a text message, and the whole row is readable one-handed. */
+
+.sn-app{padding-top:22px; padding-bottom:48px; max-width:640px}
+
+.sn-head{margin-bottom:14px}
+.sn-kicker{font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--accent-deep)}
+:root[data-theme="dark"] .sn-kicker{color:var(--accent)}
+@media (prefers-color-scheme:dark){.sn-kicker{color:var(--accent)}}
+.sn-head h1{margin:2px 0 4px; font-size:30px; line-height:1.1; letter-spacing:.01em}
+.sn-lead{margin:0 0 18px; color:var(--muted); font-size:14px; max-width:56ch}
+.sn-foot{margin-top:22px}
+
+.sn-status{
+  background:var(--cone-soft); color:var(--ink); border:1px solid var(--line);
+  border-radius:var(--r); padding:12px 14px; font-size:14px; margin-bottom:16px;
+}
+
+/* month heading + one card of rows, like a printed schedule */
+.sn-month{font-size:15px; font-weight:700; margin:22px 0 8px}
+.sn-month:first-child{margin-top:4px}
+.sn-games{
+  list-style:none; margin:0; padding:0;
+  background:var(--surface); border:1px solid var(--line); border-radius:var(--r);
+  box-shadow:var(--shadow); overflow:hidden;
+}
+.sn-game{display:flex; gap:12px; align-items:flex-start; padding:12px 14px; border-top:1px solid var(--line)}
+.sn-game:first-child{border-top:0}
+.sn-game.past{opacity:.55}
+
+.sn-date{flex:0 0 44px; text-align:center; line-height:1.05; padding-top:2px}
+.sn-date .dow{display:block; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--muted)}
+.sn-date .day{display:block; font-size:22px; font-weight:800}
+
+.sn-body{flex:1 1 auto; min-width:0}
+.sn-title{font-weight:700; font-size:15px}
+.sn-meta{color:var(--muted); font-size:12.5px; margin-top:1px}
+
+/* the right-hand state: open / taken / yours */
+.sn-slot{margin-top:8px; display:flex; flex-wrap:wrap; gap:8px; align-items:center}
+.sn-who{
+  display:inline-flex; align-items:center; gap:6px;
+  background:var(--accent-soft); color:var(--accent-deep);
+  border-radius:999px; padding:4px 11px; font-size:13px; font-weight:700;
+}
+:root[data-theme="dark"] .sn-who{color:var(--accent)}
+@media (prefers-color-scheme:dark){.sn-who{color:var(--accent)}}
+.sn-who .you{font-size:10px; text-transform:uppercase; letter-spacing:.06em; background:var(--accent); color:#fff; border-radius:999px; padding:1px 6px}
+.sn-note{color:var(--ink); font-size:13px; flex-basis:100%}
+.sn-when{color:var(--muted); font-size:12px; flex-basis:100%}
+.sn-open{color:var(--muted); font-size:13px; font-style:italic}
+
+/* inline sign-up form */
+.sn-form{margin-top:10px; display:flex; flex-direction:column; gap:8px}
+.sn-form input[type=text]{padding:10px 12px; font-size:16px}   /* 16px: iOS does not zoom */
+.sn-form .acts{display:flex; gap:8px; flex-wrap:wrap}

@@ -2810,8 +2810,16 @@
       "file": "src/worker.js",
       "root_cause": "getSchedule(env, request) ignored the team id entirely and served the single global GC_ICS_URL feed, and gate() returns allow when the team row does not exist (unlocked-team behaviour). So any well-formed id reached the feed. The edge cache made it a pure disclosure (a child's whereabouts), not a GC-hammering bug.",
       "fix": "Passed db + id into getSchedule and added `SELECT 1 FROM teams WHERE id = ?` before fetching the feed — 404 when the team row is absent. Row-existence, not an env allowlist (adversarial review rejected the allowlist as over-engineered; real ids are 128-bit random). Tests: unknown id -> 404; known id -> reaches the GC_ICS_URL config check (501) not 404. Updated schedule.test.mjs noTeamDb stub to return a truthy row (existing, unlocked team) since first()=>null now 404s.",
-      "tags": ["security", "disclosure", "schedule", "worker", "infra-audit"],
-      "related_bugs": ["bug-117"],
+      "tags": [
+        "security",
+        "disclosure",
+        "schedule",
+        "worker",
+        "infra-audit"
+      ],
+      "related_bugs": [
+        "bug-117"
+      ],
       "occurrences": 1,
       "last_seen": "2026-08-10T00:00:00.000Z"
     },
@@ -2822,8 +2830,18 @@
       "file": "src/worker.js",
       "root_cause": "SELECT rev then an unconditional INSERT ... ON CONFLICT upsert. Two in-flight writers reading rev=5 both pass `baseRev===curRev` and both write rev=6 — the exact lost-write the rev field exists to flag.",
       "fix": "Replaced the blind upsert with a conditional write: guarded `UPDATE teams SET doc,rev,updated_at WHERE id=? AND rev=?` (bound to the rev just read), check meta.changes; changes===0 && no row -> INSERT (first write); changes===0 && row exists -> a concurrent writer won, re-read and return the 409 conflict shape. force / baseRev:null still write unconditionally (UPDATE-by-id + INSERT fallback, no old upsert path). No transaction, no DO. Test 'concurrent writers on the same base rev' drives the interleaving via a stub whose SELECT rev returns a fixed 5 while UPDATE checks the real stored rev.",
-      "tags": ["correctness", "race", "lost-write", "toctou", "sync", "worker", "infra-audit"],
-      "related_bugs": ["bug-056"],
+      "tags": [
+        "correctness",
+        "race",
+        "lost-write",
+        "toctou",
+        "sync",
+        "worker",
+        "infra-audit"
+      ],
+      "related_bugs": [
+        "bug-056"
+      ],
       "occurrences": 1,
       "last_seen": "2026-08-10T00:00:01.000Z"
     },
@@ -2834,8 +2852,17 @@
       "file": "src/worker.js",
       "root_cause": "Per-endpoint sendPush was guarded, but the prune DELETE was outside any try/catch. A D1 write error there throws out of alarm(), and a thrown DO alarm is retried by the runtime -> duplicate 'Period over' pushes to every subscriber.",
       "fix": "Wrapped the entire alarm() body in try/catch (log-and-swallow via console.log with redact()). Also clear the stored 'team' key when {at:0} cancels the alarm (this.ctx.storage.delete('team')) — tidiness. Uses the new dbOf() helper.",
-      "tags": ["correctness", "durable-objects", "push", "retry-storm", "worker", "infra-audit"],
-      "related_bugs": ["bug-034"],
+      "tags": [
+        "correctness",
+        "durable-objects",
+        "push",
+        "retry-storm",
+        "worker",
+        "infra-audit"
+      ],
+      "related_bugs": [
+        "bug-034"
+      ],
       "occurrences": 1,
       "last_seen": "2026-08-10T00:00:02.000Z"
     },
@@ -2846,10 +2873,156 @@
       "file": "migrations/0000_init.sql",
       "root_cause": "npm run db:init and the migration files' own header comments all used --remote --file, routing through the /import endpoint that rejects a `wrangler login` token. wrangler d1 migrations apply instead sends each statement through the working /query path.",
       "fix": "Adopted the D1 migrations framework. Folded schema.sql -> migrations/0000_init.sql (full schema, all CREATE TABLE IF NOT EXISTS, idempotent) and DELETED migrations/0001_games_venue.sql + 0002_teams_pass.sql (their columns are already in 0000). DIVERGED from the handoff, which kept the ALTER files: with 0000 being the full schema, keeping 0001/0002 as ALTERs makes a fresh `apply` die on 'duplicate column name' — the very failure the local-verify step is meant to prove works. package.json: deleted db:init/db:init:local, added db:migrate / db:migrate:local. Verified: fresh throwaway-DB `migrations apply --local` ran 10 commands, created all 5 tables + venue + pass_hash columns, and re-apply is a clean no-op. Updated README, anatomy.md, cerebrum. REMAINING (user must run, hits PROD, needs interactive OAuth): seed prod d1_migrations with INSERT OR IGNORE VALUES('0000_init.sql') via --command, then npm run db:migrate.",
-      "tags": ["operations", "migrations", "d1", "oauth", "wrangler", "infra-audit", "handoff-divergence"],
-      "related_bugs": ["bug-140", "bug-141"],
+      "tags": [
+        "operations",
+        "migrations",
+        "d1",
+        "oauth",
+        "wrangler",
+        "infra-audit",
+        "handoff-divergence"
+      ],
+      "related_bugs": [
+        "bug-140",
+        "bug-141"
+      ],
       "occurrences": 1,
       "last_seen": "2026-08-10T00:00:03.000Z"
+    },
+    {
+      "id": "bug-173",
+      "timestamp": "2026-08-12T18:07:29.619Z",
+      "error_message": "Missing guard clause",
+      "file": "public/lineup-core.js",
+      "root_cause": "No early return/throw for edge case: !lu",
+      "fix": "Added guard clause: if (!lu)",
+      "tags": [
+        "auto-detected",
+        "guard-clause",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-12T18:07:29.619Z"
+    },
+    {
+      "id": "bug-174",
+      "timestamp": "2026-08-12T18:08:36.714Z",
+      "error_message": "Incorrect value in code",
+      "file": "public/app.js",
+      "root_cause": "Had \"<th>Plays</th><th>Season</th><th>D · F</th></tr>\"",
+      "fix": "Changed to \"<th>Scheduled</th><th>Season</th><th>D · F</th></",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-12T18:08:36.714Z"
+    },
+    {
+      "id": "bug-175",
+      "timestamp": "2026-08-12T18:08:50.666Z",
+      "error_message": "Incorrect value in code",
+      "file": "public/sw.js",
+      "root_cause": "Had \"sideline-shell-v15\"",
+      "fix": "Changed to \"sideline-shell-v16\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-12T18:08:50.666Z"
+    },
+    {
+      "id": "bug-176",
+      "timestamp": "2026-08-12T00:00:00.000Z",
+      "error_message": "Codex review §1.1: a game that ends early banks PLANNED playing time as if it were played — career fairness ledger corrupted",
+      "file": "public/lineup-core.js, public/app.js",
+      "root_cause": "closeGameRow() archived appearances through the current period without clipping the live period to elapsed clock time, and lu.actual was seeded +1 per period at build (tally) — so commitGame() banked future/unplayed periods into state.played. Two independent leaks: archive (live period over-credited full) and career commit (future periods included).",
+      "fix": "Added pure LineupCore.finalizeAtElapsed(lu, live, rem): recomputes lu.actual/gkActual from playedThrough (drops future + clips live in one pass) and clips the live period's app fracs by rem before the archive write. Called once in closeGameRow() before queueAppearances/commitGame. No-op at rem=0 (full time) so normal games are byte-identical. Historical incomplete archive rows intentionally NOT migrated (wrong numbers cheaper than a prod migration).",
+      "tags": [
+        "data-corruption",
+        "playing-time",
+        "fairness-ledger",
+        "codex-review",
+        "product-group-1"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-12T00:00:00.000Z"
+    },
+    {
+      "id": "bug-177",
+      "timestamp": "2026-09-05T22:05:00.000Z",
+      "error_message": "Exact-string patch of public/index.html matched 0x although the text was visibly present",
+      "file": "public/index.html",
+      "root_cause": "index.html (and README.md) are CRLF in the working tree while the patch text was LF; the emoji was a red herring.",
+      "fix": "Patcher normalises from/to per file to that file's own line ending before matching (scratchpad patch.mjs). Recorded which files are CRLF in cerebrum Key Learnings.",
+      "tags": [
+        "crlf",
+        "tooling",
+        "patch",
+        "windows"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-09-05T22:05:00.000Z"
+    },
+    {
+      "id": "bug-178",
+      "timestamp": "2026-09-05T22:05:00.000Z",
+      "error_message": "public/snacks.js: SyntaxError — regex /s*<newline>s*/ after a sed-style edit via node -e",
+      "file": "public/snacks.js",
+      "root_cause": "Backslashes in a regex literal passed through a bash-quoted `node -e` string were consumed, turning \\s*\\n\\s* into a literal newline inside the regex.",
+      "fix": "Re-applied the edit with the Edit tool; added `node --check public/*.js` to the verification step. Do-Not-Repeat entry added.",
+      "tags": [
+        "tooling",
+        "regex",
+        "escaping",
+        "snacks"
+      ],
+      "related_bugs": [
+        "bug-177"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-09-05T22:05:00.000Z"
+    },
+    {
+      "id": "bug-179",
+      "timestamp": "2026-09-05T22:05:00.000Z",
+      "error_message": "Snack smoke test: every PUT /api/snacks/:board/:uid returned unknown_game / 404 for a valid game",
+      "file": "scratchpad smoke script",
+      "root_cause": "`UID=$(...)` in bash — UID is a read-only shell variable, so the assignment failed and the URL was built with an empty uid.",
+      "fix": "Renamed to GUID; the flow then passed (200 → 409 for a second claim → mine:true/false → DELETE 404/200).",
+      "tags": [
+        "bash",
+        "smoke-test",
+        "false-alarm"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-09-05T22:05:00.000Z"
+    },
+    {
+      "id": "bug-180",
+      "timestamp": "2026-09-05T22:05:00.000Z",
+      "error_message": "Snack board for a second team would list the first team's games (single global GC_ICS_URL)",
+      "file": "src/worker.js",
+      "root_cause": "The GameChanger feed was one env secret, so every team — and therefore every snack board — read the same calendar. Surfaced by the user's 'check for support for multiple teams'.",
+      "fix": "migrations/0001_snacks.sql adds teams.ics_url; PUT /api/team/:id/schedule {url} stores a per-team feed (fetched once, refused unless it is a calendar, never echoed); feedOf(team, env) prefers it and falls back to the secret. Coach UI: '📅 Connect schedule' button on the Roster tab.",
+      "tags": [
+        "multi-team",
+        "schedule",
+        "gamechanger",
+        "snacks"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-09-05T22:05:00.000Z"
     }
   ]
 }

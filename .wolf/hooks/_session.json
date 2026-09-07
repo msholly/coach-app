@@ -1,32 +1,12 @@
 {
-  "session_id": "session-2026-08-07-0937",
-  "started": "2026-08-07T16:37:39.397Z",
-  "files_read": {
-    "c:/Users/msholly/coach-app/public/index.html": {
-      "count": 1,
-      "tokens": 6315,
-      "first_read": "2026-08-07T16:38:29.729Z"
-    },
-    "c:/Users/msholly/coach-app/public/app.css": {
-      "count": 1,
-      "tokens": 17647,
-      "first_read": "2026-08-07T16:38:45.910Z"
-    }
-  },
-  "files_written": [
-    {
-      "file": "c:/Users/msholly/coach-app/public/app.css",
-      "action": "edit",
-      "tokens": 59,
-      "at": "2026-08-07T16:38:50.373Z"
-    }
-  ],
-  "edit_counts": {
-    "public/app.css": 1
-  },
-  "anatomy_hits": 2,
+  "session_id": "session-2026-09-07-1132",
+  "started": "2026-09-07T18:32:11.531Z",
+  "files_read": {},
+  "files_written": [],
+  "edit_counts": {},
+  "anatomy_hits": 0,
   "anatomy_misses": 0,
   "repeated_reads_warned": 0,
   "cerebrum_warnings": 0,
-  "stop_count": 2
+  "stop_count": 0
 }

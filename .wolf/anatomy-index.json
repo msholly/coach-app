@@ -1,0 +1,583 @@
+{
+  "version": 1,
+  "meta": {
+    "lastScanned": "2026-08-12T19:01:16.765Z",
+    "fileCount": 95,
+    "hits": 0,
+    "misses": 0,
+    "renderedHash": "dd322430c1c3464b792595c558a11e468ff8ac58554150efe066a0f5d46aa9e3",
+    "storeUpdatedAt": "2026-08-12T19:01:16.766Z"
+  },
+  "files": {
+    ".dev.vars": {
+      "description": "",
+      "tokens": 134,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".dev.vars.example": {
+      "description": "Local secrets for `wrangler dev`. Copy to `.dev.vars` and fill in.",
+      "tokens": 238,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".gitignore": {
+      "description": "Git ignore rules",
+      "tokens": 14,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    "CLAUDE.md": {
+      "description": "OpenWolf",
+      "tokens": 57,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    "docker-compose.yml": {
+      "description": "Docker Compose services",
+      "tokens": 187,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    "package-lock.json": {
+      "description": "npm lock file",
+      "tokens": 14099,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    "package.json": {
+      "description": "Node.js package manifest",
+      "tokens": 161,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    "README.md": {
+      "description": "Project documentation",
+      "tokens": 2535,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    "wrangler.jsonc": {
+      "description": "",
+      "tokens": 524,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".claude/settings.json": {
+      "description": "",
+      "tokens": 441,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".claude/settings.local.json": {
+      "description": "",
+      "tokens": 348,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".claude/rules/openwolf.md": {
+      "description": "",
+      "tokens": 313,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".wrangler/state/v3/cache/miniflare-CacheObject/metadata.sqlite-shm": {
+      "description": "",
+      "tokens": 8738,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".wrangler/state/v3/cache/miniflare-CacheObject/metadata.sqlite-wal": {
+      "description": "",
+      "tokens": 2206,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".wrangler/state/v3/d1/miniflare-D1DatabaseObject/metadata.sqlite-shm": {
+      "description": "",
+      "tokens": 8739,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".wrangler/state/v3/d1/miniflare-D1DatabaseObject/metadata.sqlite-wal": {
+      "description": "",
+      "tokens": 2206,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".wrangler/state/v3/do/coach-sideline-GameClock/metadata.sqlite-shm": {
+      "description": "",
+      "tokens": 8738,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".wrangler/state/v3/do/coach-sideline-GameClock/metadata.sqlite-wal": {
+      "description": "",
+      "tokens": 30763,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".wrangler/state/v3/do/coach-sideline-verify-GameClock/metadata.sqlite-shm": {
+      "description": "",
+      "tokens": 8738,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".wrangler/state/v3/do/coach-sideline-verify-GameClock/metadata.sqlite-wal": {
+      "description": "",
+      "tokens": 2205,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".wrangler/state/v3/observability/miniflare-wobs-trace-store/a590acd76969f996ec6e4b599c3c09f58c283a76f2d61392b5d3046caf557602.sqlite-shm": {
+      "description": "",
+      "tokens": 8738,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".wrangler/state/v3/observability/miniflare-wobs-trace-store/metadata.sqlite-shm": {
+      "description": "",
+      "tokens": 8738,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".wrangler/state/v3/observability/miniflare-wobs-trace-store/metadata.sqlite-wal": {
+      "description": "",
+      "tokens": 2206,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".wrangler/tmp/bundle-BVrPiq/middleware-insertion-facade.js": {
+      "description": "Exports __INTERNAL_WRANGLER_MIDDLEWARE__",
+      "tokens": 199,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".wrangler/tmp/bundle-BVrPiq/middleware-loader.entry.ts": {
+      "description": "This loads all middlewares exposed on the middleware object and then starts",
+      "tokens": 1179,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".wrangler/tmp/bundle-Gms9mH/middleware-insertion-facade.js": {
+      "description": "Exports __INTERNAL_WRANGLER_MIDDLEWARE__",
+      "tokens": 199,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".wrangler/tmp/bundle-Gms9mH/middleware-loader.entry.ts": {
+      "description": "This loads all middlewares exposed on the middleware object and then starts",
+      "tokens": 1179,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".wrangler/tmp/bundle-LYKftZ/middleware-insertion-facade.js": {
+      "description": "Exports __INTERNAL_WRANGLER_MIDDLEWARE__",
+      "tokens": 199,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".wrangler/tmp/bundle-LYKftZ/middleware-loader.entry.ts": {
+      "description": "This loads all middlewares exposed on the middleware object and then starts",
+      "tokens": 1179,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".wrangler/tmp/bundle-c3vJYB/middleware-insertion-facade.js": {
+      "description": "Exports __INTERNAL_WRANGLER_MIDDLEWARE__",
+      "tokens": 199,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".wrangler/tmp/bundle-c3vJYB/middleware-loader.entry.ts": {
+      "description": "This loads all middlewares exposed on the middleware object and then starts",
+      "tokens": 1179,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".wrangler/tmp/bundle-evyOqN/middleware-insertion-facade.js": {
+      "description": "Exports __INTERNAL_WRANGLER_MIDDLEWARE__",
+      "tokens": 199,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".wrangler/tmp/bundle-evyOqN/middleware-loader.entry.ts": {
+      "description": "This loads all middlewares exposed on the middleware object and then starts",
+      "tokens": 1179,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".wrangler/tmp/dev-ZaAjRb/worker.js": {
+      "description": "API routes: GET (2 endpoints)",
+      "tokens": 9018,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".wrangler/tmp/dev-ZaAjRb/worker.js.map": {
+      "description": "ID_RE: getTeam, putTeam, flow + 8 more",
+      "tokens": 17792,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".wrangler/tmp/dev-eN5I4k/worker.js": {
+      "description": "API routes: GET (2 endpoints)",
+      "tokens": 9018,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".wrangler/tmp/dev-eN5I4k/worker.js.map": {
+      "description": "ID_RE: getTeam, putTeam, flow + 8 more",
+      "tokens": 17792,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".wrangler/tmp/dev-koSKow/worker.js": {
+      "description": "API routes: GET (2 endpoints)",
+      "tokens": 9018,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".wrangler/tmp/dev-koSKow/worker.js.map": {
+      "description": "ID_RE: getTeam, putTeam, flow + 8 more",
+      "tokens": 17792,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".wrangler/tmp/dev-n1hBDV/worker.js": {
+      "description": "API routes: GET (2 endpoints)",
+      "tokens": 9018,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".wrangler/tmp/dev-n1hBDV/worker.js.map": {
+      "description": "ID_RE: getTeam, putTeam, flow + 8 more",
+      "tokens": 17792,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".wrangler/tmp/dev-pKt3BY/worker.js": {
+      "description": "API routes: GET (2 endpoints)",
+      "tokens": 9018,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    ".wrangler/tmp/dev-pKt3BY/worker.js.map": {
+      "description": "ID_RE: getTeam, putTeam, flow + 8 more",
+      "tokens": 17792,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    "docs/azure-research.md": {
+      "description": "Azure as a future home — research",
+      "tokens": 1602,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    "docs/coaching-guide-audit.md": {
+      "description": "Coach's Sideline — audit against the U8 coaching guide",
+      "tokens": 3807,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    "docs/codex-second-opinion-prompt.md": {
+      "description": "Codex handoff prompt: second-opinion review (AYSO flow fidelity, metrics audit, weaknesses, competitive analysis)",
+      "tokens": 950,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    "docs/Fall 2026 - Guide for Coaching U8.md": {
+      "description": "**Guide for Coaching U8 at AYSO Region 630**",
+      "tokens": 1461,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    "docs/firebase-research.md": {
+      "description": "Firebase as a future home — research",
+      "tokens": 1937,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    "docs/fixes-progress.md": {
+      "description": "Fixes progress tracker",
+      "tokens": 440,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    "docs/game-day-design-prompt.md": {
+      "description": "Game Day UI — design iteration prompt",
+      "tokens": 1488,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    "docs/game-day-ui-plan.md": {
+      "description": "Game Day UI — plan and adversarial review",
+      "tokens": 10821,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    "docs/gamechanger-integration-plan.md": {
+      "description": "GameChanger & League Platform Integration — Findings and Plan",
+      "tokens": 3109,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    "docs/infrastructure-audit.md": {
+      "description": "Infrastructure audit — findings and adversarial review",
+      "tokens": 3263,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    "docs/infrastructure-fixes-handoff.md": {
+      "description": "Handoff — infrastructure audit fixes",
+      "tokens": 2464,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    "docs/on-field-design-prompt.md": {
+      "description": "\"On the field\" — design iteration prompt",
+      "tokens": 2270,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    "docs/product-fixes-handoff.md": {
+      "description": "Handoff — product review fixes (Codex second opinion)",
+      "tokens": 4656,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    "docs/voice-game-log-plan.md": {
+      "description": "\"Call the game out loud\" — voice event log + LLM reporting",
+      "tokens": 13143,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    "docs/handoffs/design_handoff_game_day_8b/Game Day Harness.dc.html": {
+      "description": "",
+      "tokens": 75120,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    "docs/handoffs/design_handoff_game_day_8b/HANDOFF.md": {
+      "description": "Handoff: Game Day \"On the field\" panel — option 8b",
+      "tokens": 3497,
+      "updatedAt": "2026-08-12T19:01:16.765Z",
+      "source": "md-import"
+    },
+    "docs/handoffs/design_handoff_game_day_8b/support.js": {
+      "description": "getReact: getReactDOM, parseDcDocument, parseDcText + 10 more",
+      "tokens": 19753,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    },
+    "docs/handoffs/github-repo-coach-app-connection/README.md": {
+      "description": "Project documentation",
+      "tokens": 422,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    },
+    "docs/handoffs/github-repo-coach-app-connection/project/.thumbnail": {
+      "description": "",
+      "tokens": 3484,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    },
+    "docs/handoffs/github-repo-coach-app-connection/project/Coaching Guide Audit.dc.html": {
+      "description": "",
+      "tokens": 7367,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    },
+    "docs/handoffs/github-repo-coach-app-connection/project/doc-page.js": {
+      "description": "<doc-page> — paged-document shell for printable HTML.",
+      "tokens": 10594,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    },
+    "docs/handoffs/github-repo-coach-app-connection/project/Game Day Harness.dc.html": {
+      "description": "",
+      "tokens": 42268,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    },
+    "docs/handoffs/github-repo-coach-app-connection/project/github.md": {
+      "description": "Last sync",
+      "tokens": 287,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    },
+    "docs/handoffs/github-repo-coach-app-connection/project/support.js": {
+      "description": "getReact: getReactDOM, parseDcDocument, parseDcText + 10 more",
+      "tokens": 19753,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    },
+    "docs/handoffs/github-repo-coach-app-connection/project/uploads/game-day-ui-plan.md": {
+      "description": "Game Day UI — plan and adversarial review",
+      "tokens": 10821,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    },
+    "migrations/0000_init.sql": {
+      "description": "Full D1 schema, applied via `wrangler d1 migrations apply` (db:migrate[:local]). Idempotent (all CREATE TABLE IF NOT EXISTS); folds in the former 0001 venue / 0002 pass_hash ALTERs.",
+      "tokens": 1174,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    },
+    "public/_headers": {
+      "description": "Security headers for the static app. Workers static assets support _headers",
+      "tokens": 256,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    },
+    "public/app.css": {
+      "description": "Styles: 61 vars, 9 media queries, 2 animations",
+      "tokens": 17677,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    },
+    "public/app.js": {
+      "description": "nowMs: fmt, load, loadMeta + 24 more",
+      "tokens": 43661,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    },
+    "public/diagram.js": {
+      "description": "SVG drill diagrams: spec -> markup string. Pure — no DOM, no app state.",
+      "tokens": 909,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    },
+    "public/drills.js": {
+      "description": "Drill library — static content, no logic. Loaded before app.js; exposes DRILLS.",
+      "tokens": 2681,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    },
+    "public/index.html": {
+      "description": "Coach's Sideline — U8 AYSO",
+      "tokens": 6315,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    },
+    "public/lineup-core.js": {
+      "description": "pure fairness/lineup math: posSplit, tally, playedThrough, finalizeAtElapsed (clip ledgers at game end), appearanceRows + more",
+      "tokens": 6300,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    },
+    "public/manifest.webmanifest": {
+      "description": "",
+      "tokens": 101,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    },
+    "public/outbox.js": {
+      "description": "load: save, flush",
+      "tokens": 916,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    },
+    "public/state.js": {
+      "description": "defaults: fixup, migrate, load",
+      "tokens": 955,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    },
+    "public/stats.js": {
+      "description": "detailOf: rollupEvents, withTimeFixes",
+      "tokens": 687,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    },
+    "public/sw.js": {
+      "description": "Shell cache so a cold launch works with no signal (the sideline case).",
+      "tokens": 820,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    },
+    "src/worker.js": {
+      "description": "Coach's Sideline — Cloudflare Worker",
+      "tokens": 10357,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    },
+    "test/archive.test.mjs": {
+      "description": "In-memory stand-in for the archive tables. Statements are matched on the",
+      "tokens": 2636,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    },
+    "test/auth.test.mjs": {
+      "description": "API routes: GET (5 endpoints)",
+      "tokens": 2647,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    },
+    "test/credit.test.mjs": {
+      "description": "lineup-core.js is a plain browser script; evaluate it and grab the global.",
+      "tokens": 3082,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    },
+    "test/finalize.test.mjs": {
+      "description": "§1.1: finalizeAtElapsed clips ledgers to elapsed at early finish; full-time is byte-identical.",
+      "tokens": 800,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    },
+    "test/iv.test.mjs": {
+      "description": "lineup-core.js is a plain browser script; evaluate it and grab the global.",
+      "tokens": 2031,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    },
+    "test/lineup.test.mjs": {
+      "description": "lineup-core.js is a plain browser script; evaluate it and grab the global.",
+      "tokens": 4340,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    },
+    "test/outbox.test.mjs": {
+      "description": "outbox.js is a plain browser script. It reads localStorage and fetch as free",
+      "tokens": 1504,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    },
+    "test/played.test.mjs": {
+      "description": "lineup-core.js is a plain browser script; evaluate it and grab the global.",
+      "tokens": 2000,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    },
+    "test/schedule.test.mjs": {
+      "description": "API routes: GET (1 endpoints)",
+      "tokens": 1752,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    },
+    "test/season.test.mjs": {
+      "description": "src: rng, buildGame, commit + 5 more",
+      "tokens": 5899,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    },
+    "test/state.test.mjs": {
+      "description": "state.js is a plain browser script: it reads LineupCore and localStorage as",
+      "tokens": 1689,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    },
+    "test/stats.test.mjs": {
+      "description": "Declares src",
+      "tokens": 1593,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    },
+    "test/worker.test.mjs": {
+      "description": "Minimal in-memory stand-in for the D1 binding. All first() queries in the worker",
+      "tokens": 2734,
+      "updatedAt": "2026-08-12T19:01:16.766Z",
+      "source": "md-import"
+    }
+  }
+}

@@ -2,7 +2,7 @@
 
 > OpenWolf's learning memory. Updated automatically as the AI learns from interactions.
 > Do not edit manually unless correcting an error.
-> Last updated: 2026-08-04
+> Last updated: 2026-09-05
 
 ## User Preferences
 
@@ -10,6 +10,7 @@
 
 ## Key Learnings
 - TWO LEDGERS, always ask which one a number is. `lu.actual`/`lu.gkActual`/`lu.app` are whole-game PROJECTIONS — buildPeriods stamps every planned period frac:1 and tally() adds +1 for the rest of the game the moment a sheet is built. Only `playedThrough()` (and `ivPlayed()`) give banked time. Display surfaces need banked; build-time fairness ordering needs the projection. Before touching any playtime number, decide which. See [[bug-156]].
+- `closeGameRow()` is the SINGLE seam a game leaves the live doc through (full time, a new game replacing it, season rollover — all three funnel here). It now calls `LineupCore.finalizeAtElapsed(lu, curPi(), remFrac())` to convert the projection ledgers to banked time BEFORE `queueAppearances` and the caller's `commitGame`. Without that clip an early finish banks planned-but-unplayed periods into careers (§1.1 / [[bug-176]]). It is a no-op at rem=0, so normal full-time games stay byte-identical — the regression guard in `test/finalize.test.mjs`. Historical incomplete archive rows are intentionally NOT migrated.
 - Discounting the live period is NOT a blanket subtraction once you filter by position. Unfiltered it works because a mid-period swap leaves the two entries summing to 1; filtered to GK (or D/F) that invariant is gone and a blanket discount double-charges. Trim only `activeEntry()` — the entry actually running. Both `playedThrough(...,pos)` and `positionTotals(...,live,rem)` rely on this.
 - User's stated goal for Game Day: a majority of the screen must serve split-second decisions, with some season/multi-game context alongside. Season stats belong there — they just have to be numbers you can act on without mentally subtracting the plan.
 - Game Day tests should simulate a full realistic game (4 periods, a sub each period, a keeper swap, breaks, half-time) and assert invariants at every beat, not just at full time. See `test/credit.test.mjs` and `test/played.test.mjs` for the pattern: mirror the app.js wrappers (`remFrac`, `curPi`) in the test file and drive a `g` object.
@@ -133,6 +134,12 @@ return Outbox;")(fake, fake)`. This is why none of these modules take injected d
 - **Mixed stale shell is a real failure mode** (bug-151): the SW cache / a zombie dev server can serve NEW app.js beside OLD app.css/state.js — symptoms are unstyled new markup (name+verdict text run together, invisible tracks) and every verdict "on from now" (empty lu.iv because old fixup lacks ensureIv). renderOnField now calls `LineupCore.ensureIv` itself before reading `lu.iv` as a permanent guard; the CSS half has no in-app guard — bump the SW CACHE and suspect the serving layer before suspecting the implementation.
 - **Headless driver gotchas (8b round):** a `page.goto` that only changes the URL hash does NOT reload the document — call `page.reload()` to re-boot the app. `page.setOfflineMode(true)` before `navigator.serviceWorker.ready` resolves aborts the SW install and kills offline reloads. A paused-clock strip of localStorage still races `saveLocal()` if the ticker runs — pause first. Rapid scripted flows race the debounced sync push and can get a stale doc ADOPTED back (lineup vanished mid-run); run programmatic UI flows offline after SW ready, or wait between build and play.
 
+- Workers static assets serve `public/snacks.html` at **`/snacks`** and answer `/snacks.html` with a 307 (html_handling default). Link to the extensionless path; a hash survives the redirect but the round-trip is pointless.
+- `public/index.html` and `README.md` are CRLF in the working tree; `src/worker.js`, `public/app.js`, `public/sw.js` are LF. Any exact-string patcher must normalise per file or it silently matches 0×.
+- `sw.js` keys EVERY navigation to "/" — a second page (`/snacks`) would be served the coach app from cache on a phone that has the SW. Navigations to any path other than `/` or `/index.html` now bypass the SW (v17).
+- The GameChanger feed is per team since 0001_snacks: `feedOf(teamRow, env)` = `teams.ics_url || env.GC_ICS_URL`. `loadCalendar(rawUrl)` takes the URL, not env — every caller resolves the team first.
+- Headless Chrome `--window-size=430` screenshots clip the right edge even when nothing overflows (layout viewport ≠ window). Trust `Emulation.setDeviceMetricsOverride` + `scrollWidth === innerWidth` over the picture; a CDP walk lives in the session scratchpad pattern (`cdp.mjs`).
+
 ## Do-Not-Repeat
 
 - [2026-08-05] **An author `display` rule on a `<dialog>` beats the UA's `dialog:not([open]){display:none}`.** `dialog.sheet.cardsheet{display:flex}` left the closed player card rendering in normal flow at the foot of `<body>`. Scope layout display to `[open]` (`dialog.sheet.cardsheet[open]{display:flex}`) and keep only box metrics on the base rule. Same family as the `hidden` attribute losing to `.clock-band{display:flex}` — a UA or attribute default never wins against an author rule. See [[bug-138]].
@@ -151,6 +158,10 @@ return Outbox;")(fake, fake)`. This is why none of these modules take injected d
 <!-- Format: [YYYY-MM-DD] Description of what went wrong and what to do instead. -->
 
 - **2026-08-04 — Never use `git stash` to A/B a baseline mid-edit.** Ran `git stash push -- public/index.html` to compare 404s against the pre-change page; it silently reverted in-progress script tags and the work had to be popped back. To compare against the committed version, use `git show HEAD:path` or curl the served file — never move the working tree while editing it.
+
+- [2026-09-05] **`UID` is a read-only bash variable** (`UID: readonly variable`). A smoke script that did `UID=$(...)` silently ran the rest of the flow with an empty id and produced a wall of misleading 404s. Use `GUID`/`EVUID`.
+- [2026-09-05] **Never kill processes by matching the command line of the shell you are in.** `Get-CimInstance Win32_Process | ? CommandLine -like '*wrangler.snacktest*'` matched the bash running it and the tool call died with exit 255 mid-cleanup. Match on the child (`workerd.exe`, or the node with `wrangler dev` in its line) and exclude `$PID`.
+- [2026-09-05] **Don't push a regex through `node -e` in a bash string.** `\s*\n` lost its backslashes and landed as a literal newline inside `/…/` in snacks.js — a syntax error the tests don't load. Use the Edit tool (or a script file) for anything with backslashes; run `node --check` on browser scripts after sed/node edits.
 
 ## User Preferences (cont.)
 
@@ -178,3 +189,4 @@ return Outbox;")(fake, fake)`. This is why none of these modules take injected d
 - **2026-08-04 — Kept plain `<script>` + globals; did NOT migrate to ES modules.** The `window.X` + `new Function(src)` test pattern already worked and costs two lines per test file. ESM would have churned 5 source files, 5 test files and sw.js for no functional gain (there is no build step either way). Revisit only when the extracted modules need to import *each other* — today at most one of them does.
 - [2026-08-06] **8b handoff: kept the per-row ⚽/🥅 stat buttons (`.jrow`/`.jstat`) beside the new chips.** The harness commentary wanted them removed, but the handoff explicitly said "those never shipped — nothing to remove", which was wrong (they shipped, and the 🥅 SOG button is the ONLY entry point for shot logging). Removing them would have silently deleted a feature the handoff never authorized removing. The bench chip header's rec line ("↑ X has played…") WAS removed — every chip's verdict now carries that information.
 - **2026-08-04 — Save/queue glue stayed in app.js.** `save()`, `loadMeta`/`saveMeta`, `logEvent`, `queueGameRow`, `queueAppearances` all read app closure state (`state`, `TEAM`, `schedulePush`, `g.recent`). Moving them would have meant injecting those, which buys nothing — only the shape (`state.js`) and the flush (`outbox.js`) came out.
+- [2026-09-05] **Snack sign-up is a second capability link, not a mode of the team link.** `snack_boards.id` is its own unguessable token; `/api/snacks/*` sits outside `gate()`. Reason: the team token is the coach's write capability, and the passphrase exists precisely so it doesn't leak — texting it to twelve families would undo that. Ownership of a slot is a per-browser `claim` (random, localStorage), never echoed by the server; the coach clears via the gated team route. Games come from the GC feed (practices skipped) so there is nothing for the coach to maintain. Multi-team: one board per team (`team_id UNIQUE`) and a per-team feed (`teams.ics_url`, global secret as fallback).

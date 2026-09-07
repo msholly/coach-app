@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Snack sign-up</title>
+<!-- The parents' page. Deliberately NOT the coach's app: no manifest, no service
+     worker, no team token. It reaches the server only through /api/snacks/:board,
+     where the board id in the hash (#b=...) is the whole credential. -->
+<meta name="theme-color" content="#f4f2ea" media="(prefers-color-scheme:light)">
+<meta name="theme-color" content="#131711" media="(prefers-color-scheme:dark)">
+<link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/snacks.css">
+</head>
+<body>
+
+<div class="wrap">
+<div class="app sn-app">
+
+  <header class="sn-head">
+    <div class="sn-kicker">🍊 Snack sign-up</div>
+    <h1 class="display" id="teamName">Team snacks</h1>
+    <p class="hint" id="sub"></p>
+  </header>
+
+  <p class="sn-lead">Pick a game to bring snacks for the team. Everyone with this link sees the same list, so you can see which games are still open and who has the others.</p>
+
+  <div class="sn-status" id="status" hidden></div>
+  <div id="list" aria-live="polite"></div>
+
+  <p class="hint sn-foot" id="foot" hidden>Signed up on this phone? You can change or give back your game any time. Games come from the team's GameChanger schedule.</p>
+
+</div>
+</div>
+
+<div id="toast" class="toaststack" aria-live="polite"></div>
+
+<script src="/snacks.js"></script>
+</body>
+</html>

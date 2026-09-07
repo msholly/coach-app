@@ -75,6 +75,17 @@ table and only runs the new ones.
 > just keeps `migrations list` honest. It's the ALTER files in *future* migrations that would
 > fail on a double-apply, which is what the tracker prevents.)
 
+## Snack sign-up (parents)
+
+A public page, separate from the coach's tools: `/snacks#b=<board>` (the file is `public/snacks.html`; static assets serve it at `/snacks`). The coach taps
+**🍊 Snack sign-up link** on the Roster tab, which mints one board per team (the same link
+every time) and copies it. Everyone holding the link sees every game with who has snacks,
+takes an open game with their name and an optional note, and can change or give back their
+own. "Own" is a random `claim` the signer's browser keeps in localStorage; it never comes
+back out of the server, so one family cannot drop another. The coach can clear any slot.
+Games are the team's GameChanger feed (see below) minus practices — the board never sees the
+roster or the team doc, and the board id is never the team token.
+
 ## GameChanger schedule (optional, read-only)
 
 GameChanger publishes a per-team **ICS subscription feed** — the only integration point it
@@ -86,6 +97,11 @@ summary (`Team vs X` = home, `Team @ X` = away; anything else stays `null`).
 npx wrangler secret put GC_ICS_URL     # production
 # local: GC_ICS_URL=... in .dev.vars
 ```
+
+**More than one team:** the secret can only describe one team. **📅 Connect schedule** on the
+Roster tab takes GameChanger's "Subscribe to calendar" link for *this* team and stores it on
+the team row (`teams.ics_url`, added by `migrations/0001_snacks.sql`). A team's own link wins;
+the secret stays as the fallback, so a one-team install needs nothing new.
 
 **The feed URL's `token` parameter is a bearer credential** — anyone holding the URL can read
 the team's schedule. It lives only in the secret, is used only server-side, and never reaches
@@ -182,3 +198,17 @@ add `nosniff` in `src/worker.js`. The CSP allows **no external origins and no in
 - `GET /api/team/:id/schedule` → `{ calendar, events:[{ uid, startsAt, endsAt, summary,
   location, description, venue, opponent }] }`. **501** when `GC_ICS_URL` isn't set, **502**
   if the feed is unreachable or isn't a calendar. Never returns the feed URL or its token.
+  `source` is `"team"` (this team's own link) or `"global"` (the secret).
+- `PUT /api/team/:id/schedule` body `{ url }` — connect this team's own feed (`webcal://` or
+  `https://`; fetched once and refused with **502** if it isn't a calendar), `{ url: null }`
+  disconnects. → `{ connected, source, calendar, games }`. The URL is never echoed back.
+- `GET /api/team/:id/snacks` → `{ board, signups:[{ uid, name, note, at }] }` (`board` null
+  until minted) · `POST` mints the board once → `{ board, created }` ·
+  `DELETE /api/team/:id/snacks/:uid` clears any slot. All gated like the rest of `/api/team`.
+- `GET /api/snacks/:board[?claim=]` (public) → `{ team, season, calendar, events:[{ uid,
+  startsAt, endsAt, summary, location, opponent, venue, signup:{ name, note, at, mine }|null }] }`,
+  games only. **404** unknown board, **501**/**502** as for the schedule.
+- `PUT /api/snacks/:board/:uid` body `{ name, note?, claim }` — take a game or change your
+  own signup; **409** `taken` if another claim has it, **404** if the uid isn't a scheduled game.
+  `DELETE` body `{ claim }` gives it back (**404** unless the claim matches). Both are rate
+  limited per board + caller IP (**429**).

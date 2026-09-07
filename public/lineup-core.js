@@ -386,6 +386,50 @@ var LineupCore = (function () {
     return n;
   }
 
+  // Freeze a game at the moment it ends. Until now the ledgers hold the PLAN:
+  // lu.actual was seeded +1 for every period (including ones never played) and
+  // the live period's app fracs are still frac:1 from build time. Both leak into
+  // the career ledger (commitGame banks lu.actual) and the archive
+  // (appearanceRows reads app) unless we clip to elapsed clock time first.
+  //
+  //   live = index of the period on the clock
+  //   rem  = fraction of that period still unplayed (0 at a period boundary /
+  //          full time, so a normal full-time game is a no-op — byte-identical)
+  //
+  // Reuses playedThrough for the clip math rather than re-deriving it.
+  function finalizeAtElapsed(lu, live, rem) {
+    if (!lu) return lu;
+    var last = Math.min(live, (lu.periods ? lu.periods.length : 0) - 1);
+    if (last < 0) { lu.actual = {}; lu.gkActual = {}; return lu; }
+    var r = Math.min(1, Math.max(0, rem || 0));
+
+    // 1) Career ledgers: recompute from what was actually played through `last`.
+    //    This drops future periods AND clips the live one in a single pass.
+    var ids = {};
+    (lu.app || []).slice(0, last + 1).forEach(function (es) {
+      es.forEach(function (e) { if (e.frac > 1e-9) ids[e.id] = 1; });
+    });
+    lu.actual = {}; lu.gkActual = {};
+    Object.keys(ids).forEach(function (id) {
+      var p = playedThrough(lu, last, id, live, r);
+      if (p > 1e-9) lu.actual[id] = p;
+      var g = playedThrough(lu, last, id, live, r, "GK");
+      if (g > 1e-9) lu.gkActual[id] = g;
+    });
+
+    // 2) Archive: clip the live period's running entry to elapsed, then drop the
+    //    unplayed future so no path can archive a period that was never played.
+    var es = (lu.app || [])[last];
+    if (es && r > 1e-9) {
+      (lu.periods[last] || []).forEach(function (id) {
+        var a = activeEntry(es, id);
+        if (a) a.frac = Math.max(0, a.frac - r);
+      });
+    }
+    if (lu.app && lu.app.length > last + 1) lu.app.length = last + 1;
+    return lu;
+  }
+
   // Rows for the append-only `appearances` archive, periods 1..upto only —
   // future planned periods must never reach the season ledger.
   function appearanceRows(lu, gid, upto) {
@@ -423,6 +467,7 @@ var LineupCore = (function () {
     ivJustOn: ivJustOn,
     minVerdict: minVerdict,
     playedThrough: playedThrough,
+    finalizeAtElapsed: finalizeAtElapsed,
     appearanceRows: appearanceRows,
     positionTotals: positionTotals,
     posCount: posCount,

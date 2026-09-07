@@ -957,3 +957,82 @@ Reset moved from `.gd-controls` onto the clock row as an edge tag mirroring Edit
 | 21:05 | Group 5 DRY: dbOf() + readJson() helpers | src/worker.js | 8 try/catch + 3 db-binding sites deduped | ~300 |
 | 21:05 | Group 2 deploy hygiene: test-gated deploy, tunnel restart:no, backup note | package.json, docker-compose.yml, README.md | C3/C5/C4 done | ~150 |
 | 21:05 | C2 migrations: schema.sql→0000_init.sql, deleted 0001/0002 ALTERs, db:migrate scripts | migrations/, package.json, README.md, .wolf/anatomy.md, .wolf/cerebrum.md | fresh local migrate verified (10 cmds, idempotent); PROD apply left for user | ~1200 |
+| 21:01 | Session end: 26 writes across 7 files (worker.js, worker.test.mjs, schedule.test.mjs, package.json, docker-compose.yml) | 12 reads | ~25391 tok |
+
+## Session: 2026-08-11 21:02
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 21:05 | Created docs/codex-second-opinion-prompt.md | — | ~1154 |
+| 21:06 | Wrote Codex second-opinion handoff prompt | docs/codex-second-opinion-prompt.md | created | ~1000 |
+| 21:06 | Session end: 1 writes across 1 files (codex-second-opinion-prompt.md) | 1 reads | ~3772 tok |
+
+## Session: 2026-08-11 21:07
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 21:09 | Created docs/codex-second-opinion-prompt.md | — | ~3165 |
+| 21:09 | expanded Codex second-opinion prompt: +7 review sections (offline/durability, ergonomics, season lifecycle, drill content, onboarding, test quality, architecture), infra-audit deconflict, constraints block | docs/codex-second-opinion-prompt.md | done | ~12k |
+| 21:09 | Session end: 1 writes across 1 files (codex-second-opinion-prompt.md) | 3 reads | ~10200 tok |
+| 10:40 | Created docs/product-fixes-handoff.md | — | ~4967 |
+| 10:40 | converted Codex product review into grouped handoff + per-group run prompts (8 groups, deferred list) | docs/product-fixes-handoff.md | done | ~15k |
+| 10:40 | Session end: 2 writes across 2 files (codex-second-opinion-prompt.md, product-fixes-handoff.md) | 3 reads | ~15522 tok |
+
+## Session: 2026-08-12 10:11
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-08-12 10:11
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-08-12 10:11
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 10:57 | Created docs/fixes-progress.md | — | ~446 |
+| 10:57 | Session end: 1 writes across 1 files (fixes-progress.md) | 3 reads | ~7598 tok |
+| 11:07 | Created test/finalize.test.mjs | — | ~815 |
+| 11:07 | Edited public/lineup-core.js | added 8 condition(s) | ~625 |
+| 11:07 | Edited public/lineup-core.js | 2→3 lines | ~32 |
+| 11:07 | Edited test/finalize.test.mjs | find() → abs() | ~105 |
+| 11:08 | Edited public/app.js | 5→9 lines | ~150 |
+| 11:08 | Edited public/app.js | modified map() | ~110 |
+| 11:08 | Edited public/app.js | "<th>Plays</th><th>Season<" → "<th>Scheduled</th><th>Sea" | ~19 |
+| 11:08 | Edited public/sw.js | "sideline-shell-v15" → "sideline-shell-v16" | ~10 |
+| 11:10 | **Product Group 1 DONE** (§1.1 playing-time truth): finalizeAtElapsed clips ledgers at game end; failing test first; label Plays→Scheduled; sw CACHE v16 | lineup-core.js, app.js, test/finalize.test.mjs, sw.js | 121/121 pass (was 119) | ~1200 |
+| 11:10 | Edited docs/fixes-progress.md | inline fix | ~44 |
+| 11:11 | Session end: 10 writes across 5 files (fixes-progress.md, finalize.test.mjs, lineup-core.js, app.js, sw.js) | 7 reads | ~61508 tok |
+
+## Session: 2026-08-20 16:19
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-09-06 21:40
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-09-06 21:41
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-09-06 21:41
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 21:45 | Read STATUS/anatomy/cerebrum/worker/index/sw/state/auth-test to design snack sign-up | .wolf/*, src/worker.js | oriented | ~25k |
+| 21:55 | Snack sign-up: migration, worker routes (/api/team/:id/snacks, /api/snacks/:board[/:uid]), loadCalendar refactor | migrations/0001_snacks.sql, src/worker.js | done | ~9k |
+| 21:58 | Parents' page + coach 'Snack sign-up link' button; sw.js no longer serves /snacks from the '/' shell cache (v17) | public/snacks.{html,css,js}, public/app.js, public/index.html, public/sw.js | done | ~7k |
+| 22:00 | User asked to check multi-team: found single global GC feed → added per-team `teams.ics_url`, PUT /api/team/:id/schedule, 'Connect schedule' button | src/worker.js, public/app.js, public/index.html, README.md | done | ~6k |
+| 22:02 | Tests: 20 new in test/snacks.test.mjs; full suite 141/141 | test/snacks.test.mjs | pass | ~5k |
+| 22:05 | Live smoke on throwaway D1 (temp wrangler config, port 8799) + headless Chrome CDP walk of the sign-up flow; cleaned up config, sqlite, workerd | scratchpad | verified | ~6k |
+
+## Session: 2026-09-07 11:32
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|

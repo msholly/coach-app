@@ -70,7 +70,7 @@ export default {
 
       // /api/team/:id/(games|events|appearances|positions)[/:gid] — the
       // append-only archive beside the live doc. Same ID_RE trust boundary.
-      const m2 = path.match(/^\/api\/team\/([^/]+)\/(games|events|appearances|positions|stats|push|alarm|schedule|auth)(?:\/([^/]+))?$/);
+      const m2 = path.match(/^\/api\/team\/([^/]+)\/(games|events|appearances|positions|stats|push|alarm|schedule|auth|snacks)(?:\/([^/]+))?$/);
       if (m2) {
         const id = decodeURIComponent(m2[1]);
         if (!ID_RE.test(id)) return json({ error: "bad_team_id" }, 400);
@@ -97,6 +97,34 @@ export default {
         if (kind === "push" && !sub && request.method === "DELETE") return deletePushSub(db, id, request);
         if (kind === "alarm" && !sub && request.method === "POST") return postAlarm(env, id, request);
         if (kind === "schedule" && !sub && request.method === "GET") return getSchedule(env, db, id);
+        if (kind === "schedule" && !sub && request.method === "PUT") return putScheduleFeed(env, db, id, request);
+        // The coach's side of the snack board: mint the link, see who signed up, clear a slot.
+        if (kind === "snacks" && !sub && request.method === "GET") return getTeamSnacks(db, id);
+        if (kind === "snacks" && !sub && request.method === "POST") return createSnackBoard(db, id);
+        if (kind === "snacks" && sub && request.method === "DELETE") return coachClearSnack(db, id, sub);
+        return json({ error: "method_not_allowed" }, 405);
+      }
+
+      // /api/snacks/:board[/:uid] — the parents' side. NOT behind gate(): the
+      // board id is its own capability, deliberately separate from the team's.
+      const m3 = path.match(/^\/api\/snacks\/([^/]+)(?:\/([^/]+))?$/);
+      if (m3) {
+        const board = decodeURIComponent(m3[1]);
+        if (!ID_RE.test(board)) return json({ error: "bad_board_id" }, 400);
+        const db = dbOf(env);
+        const uid = m3[2] ? decodeURIComponent(m3[2]) : null;
+        if (!uid && request.method === "GET") return getBoard(env, db, board, url);
+        if (uid && (request.method === "PUT" || request.method === "DELETE")) {
+          // A public write path. Per board AND caller, so one household's
+          // burst cannot lock the rest of the team out on sign-up night.
+          if (env.LOGIN_LIMIT) {
+            const ip = request.headers.get("cf-connecting-ip") || "";
+            const { success } = await env.LOGIN_LIMIT.limit({ key: "snack:" + board + ":" + ip });
+            if (!success) return json({ error: "too_many_attempts" }, 429, { "retry-after": "60" });
+          }
+          if (request.method === "PUT") return putSignup(env, db, board, uid, request);
+          return deleteSignup(db, board, uid, request);
+        }
         return json({ error: "method_not_allowed" }, 405);
       }
 
@@ -569,20 +597,15 @@ export function parseIcsEvents(text) {
   return out.sort((a, b) => (a.startsAt || 0) - (b.startsAt || 0));
 }
 
-async function getSchedule(env, db, id) {
-  // gate() lets a nonexistent team through (link is the credential on an unlocked
-  // team), and the GC feed is a single global secret — so without this check
-  // ANY well-formed id would be served the coach's family schedule. Require the
-  // team row to exist. ponytail: a row-existence check, not an env allowlist —
-  // real team ids are 128-bit random and unguessable.
-  const team = await db.prepare("SELECT 1 FROM teams WHERE id = ?").bind(id).first();
-  if (!team) return json({ error: "not_found" }, 404);
-
-  const raw = env.GC_ICS_URL;
-  if (!raw) return json({ error: "schedule_unavailable", reason: "GC_ICS_URL is not set" }, 501);
+// Fetch + parse the feed. Returns { calendar, events } or { err: <Response> } so
+// every caller (the coach's schedule, the parents' snack board) answers the
+// same way when the feed is missing, misconfigured or down.
+// `raw` is the feed URL to use — the team's own when it has one, else the global secret.
+async function loadCalendar(raw) {
+  if (!raw) return { err: json({ error: "schedule_unavailable", reason: "no schedule feed connected" }, 501) };
   // The subscribe link is handed out as webcal://; that scheme means nothing to fetch().
   const target = String(raw).trim().replace(/^webcal:\/\//i, "https://");
-  if (!/^https:\/\//i.test(target)) return json({ error: "schedule_misconfigured" }, 500);
+  if (!/^https:\/\//i.test(target)) return { err: json({ error: "schedule_misconfigured" }, 500) };
 
   let res;
   try {
@@ -593,20 +616,221 @@ async function getSchedule(env, db, id) {
       cf: { cacheTtl: 1800, cacheEverything: true },
     });
   } catch (err) {
-    return json({ error: "schedule_fetch_failed", detail: redact(String(err && err.message || err)) }, 502);
+    return { err: json({ error: "schedule_fetch_failed", detail: redact(String(err && err.message || err)) }, 502) };
   }
-  if (!res.ok) return json({ error: "schedule_fetch_failed", status: res.status }, 502);
+  if (!res.ok) return { err: json({ error: "schedule_fetch_failed", status: res.status }, 502) };
 
   const text = await res.text();
-  if (!/BEGIN:VCALENDAR/i.test(text)) return json({ error: "schedule_not_calendar" }, 502);
+  if (!/BEGIN:VCALENDAR/i.test(text)) return { err: json({ error: "schedule_not_calendar" }, 502) };
 
   const name = (text.match(/^X-WR-CALNAME:(.*)$/mi) || [])[1];
+  return { calendar: name ? unescapeIcs(name.trim()) : null, events: parseIcsEvents(text) };
+}
+
+async function getSchedule(env, db, id) {
+  // gate() lets a nonexistent team through (link is the credential on an unlocked
+  // team), and the GC feed is a single global secret — so without this check
+  // ANY well-formed id would be served the coach's family schedule. Require the
+  // team row to exist. ponytail: a row-existence check, not an env allowlist —
+  // real team ids are 128-bit random and unguessable.
+  const team = await db.prepare("SELECT ics_url FROM teams WHERE id = ?").bind(id).first();
+  if (!team) return json({ error: "not_found" }, 404);
+
+  const cal = await loadCalendar(feedOf(team, env));
+  if (cal.err) return cal.err;
   return json(
-    { calendar: name ? unescapeIcs(name.trim()) : null, events: parseIcsEvents(text) },
+    { calendar: cal.calendar, events: cal.events, source: team.ics_url ? "team" : "global" },
     200,
     // The response body is the coach's own schedule — never a shared/public cache.
     { "cache-control": "private, max-age=300" }
   );
+}
+
+/* ---------- per-team feed ----------
+   GC_ICS_URL is one secret, so it can only ever describe ONE team. A coach
+   with two teams connects each team's own "Subscribe to calendar" link from
+   the app, and it lives on the team row. The team's own feed wins; the global
+   secret is the fallback that keeps a one-team install working with nothing
+   to set. The URL carries a bearer token, so it is stored, used server-side,
+   and never echoed back — a PUT answers with what the feed contained, not
+   with the feed. */
+const feedOf = (teamRow, env) => (teamRow && teamRow.ics_url) || env.GC_ICS_URL || null;
+const MAX_FEED_URL = 1024;
+
+// PUT /api/team/:id/schedule  { url }  — connect this team's feed. { url: null }
+// disconnects it. The link is fetched once before it is stored: one that does
+// not return a calendar is refused, so a pasted-wrong link fails here, not on
+// every parent's phone later.
+async function putScheduleFeed(env, db, id, request) {
+  const b = await readJson(request);
+  if (b === null) return json({ error: "invalid_json_body" }, 400);
+  const team = await db.prepare("SELECT ics_url FROM teams WHERE id = ?").bind(id).first();
+  if (!team) return json({ error: "not_found" }, 404);
+  if (b.url === null || b.url === "") {
+    await db.prepare("UPDATE teams SET ics_url = NULL WHERE id = ?").bind(id).run();
+    return json({ connected: !!env.GC_ICS_URL, source: env.GC_ICS_URL ? "global" : null });
+  }
+  const url = typeof b.url === "string" ? b.url.trim() : "";
+  if (!url || url.length > MAX_FEED_URL || !/^(webcal|https):\/\//i.test(url)) return json({ error: "bad_feed_url" }, 400);
+  const cal = await loadCalendar(url);
+  if (cal.err) return cal.err;
+  await db.prepare("UPDATE teams SET ics_url = ? WHERE id = ?").bind(url, id).run();
+  return json({ connected: true, source: "team", calendar: cal.calendar, games: cal.events.filter((e) => e.venue).length });
+}
+
+/* ============================ snack sign-up ============================
+   The parents' board is a SECOND capability link, separate from the team
+   token: the team link grants every write to the doc, and handing that to
+   twelve families is exactly the leak the passphrase exists to prevent. The
+   board id is unguessable in the same way, and everything behind it is open
+   to whoever holds it — every parent sees every signup, which is the point.
+
+   Games come from the same GameChanger feed the coach sees (snacks are a
+   game thing, so practices are skipped), so there is nothing for the coach
+   to maintain: a rescheduled game keeps its UID and its signup follows it.
+
+   A signup carries a `claim`: a random token the signer's browser minted
+   and keeps in localStorage. It is the only thing that lets a slot be
+   changed or given up, so one family cannot quietly drop another. It never
+   leaves the server in a response — the board GET only says whether a row
+   is `mine` for the claim the caller presented. The coach can clear any
+   slot through the gated team route. */
+
+const CLAIM_RE = /^[A-Za-z0-9_-]{16,64}$/;
+const UID_RE = /^[A-Za-z0-9_@.:+-]{1,200}$/;   // ICS UIDs: "abc123@gc.com" and the like
+const MAX_NAME = 60, MAX_NOTE = 140;
+
+const newToken = () => b64uEncode(crypto.getRandomValues(new Uint8Array(16)));
+const publicSignup = (r) => ({ uid: r.event_uid, name: r.name, note: r.note || null, at: r.created_at });
+
+async function boardOf(db, teamId) {
+  const r = await db.prepare("SELECT id FROM snack_boards WHERE team_id = ?").bind(teamId).first();
+  return r ? r.id : null;
+}
+
+async function listSignups(db, board) {
+  const rs = await db.prepare(
+    "SELECT event_uid, name, note, claim, created_at FROM snack_signups WHERE board_id = ? ORDER BY created_at"
+  ).bind(board).all();
+  return rs.results || [];
+}
+
+// Snacks are for games. An event with no parsed venue is a practice or a
+// placeholder, and one with no UID or start could never be signed up for.
+async function snackGames(env, teamRow) {
+  const cal = await loadCalendar(feedOf(teamRow, env));
+  if (cal.err) return cal;
+  return { calendar: cal.calendar, events: cal.events.filter((e) => e.uid && e.venue && e.startsAt) };
+}
+
+// GET /api/team/:id/snacks — the coach's view: board id (null until minted) and every signup.
+async function getTeamSnacks(db, teamId) {
+  const board = await boardOf(db, teamId);
+  const signups = board ? (await listSignups(db, board)).map(publicSignup) : [];
+  return json({ board, signups });
+}
+
+// POST /api/team/:id/snacks — mint the board once. Repeat calls return the
+// same id, so the link the parents already have never changes under them.
+async function createSnackBoard(db, teamId) {
+  const team = await db.prepare("SELECT 1 FROM teams WHERE id = ?").bind(teamId).first();
+  if (!team) return json({ error: "not_found" }, 404);
+  let board = await boardOf(db, teamId);
+  const created = !board;
+  if (!board) {
+    await db.prepare(
+      "INSERT INTO snack_boards (id, team_id, created_at) VALUES (?, ?, ?) ON CONFLICT(team_id) DO NOTHING"
+    ).bind(newToken(), teamId, Date.now()).run();
+    board = await boardOf(db, teamId);   // two coaches tapping at once: whichever landed wins
+  }
+  return json({ board, created });
+}
+
+// DELETE /api/team/:id/snacks/:uid — the coach clears any slot, claim or no claim.
+async function coachClearSnack(db, teamId, uid) {
+  if (!UID_RE.test(uid)) return json({ error: "bad_uid" }, 400);
+  const board = await boardOf(db, teamId);
+  if (!board) return json({ error: "not_found" }, 404);
+  await db.prepare("DELETE FROM snack_signups WHERE board_id = ? AND event_uid = ?").bind(board, uid).run();
+  return json({ ok: true });
+}
+
+// GET /api/snacks/:board[?claim=] — the whole board: every game, who has it.
+async function getBoard(env, db, board, url) {
+  const row = await db.prepare("SELECT team_id FROM snack_boards WHERE id = ?").bind(board).first();
+  if (!row) return json({ error: "not_found" }, 404);
+
+  // Team name and season come from the doc, and nothing else does: the doc is
+  // the coach's, and the roster/lineup inside it is none of the board's business.
+  const team = await db.prepare("SELECT doc, ics_url FROM teams WHERE id = ?").bind(row.team_id).first();
+  let name = null, season = null;
+  try {
+    const d = JSON.parse((team && team.doc) || "{}");
+    name = str(d.team, 80) || null;
+    season = str(d.season, 64) || null;
+  } catch { /* a malformed doc just means no title */ }
+
+  const cal = await snackGames(env, team);
+  if (cal.err) return cal.err;
+
+  const claim = url.searchParams.get("claim") || "";
+  const by = new Map((await listSignups(db, board)).map((r) => [r.event_uid, r]));
+  const events = cal.events.map((e) => {
+    const s = by.get(e.uid);
+    return {
+      uid: e.uid, startsAt: e.startsAt, endsAt: e.endsAt, summary: e.summary,
+      location: e.location, opponent: e.opponent, venue: e.venue,
+      signup: s ? { ...publicSignup(s), mine: !!claim && s.claim === claim } : null,
+    };
+  });
+  return json({ team: name, season, calendar: cal.calendar, events });
+}
+
+// PUT /api/snacks/:board/:uid  { name, note?, claim }
+// Take an open game, or change your own signup. Someone else's slot is a 409.
+async function putSignup(env, db, board, uid, request) {
+  if (!UID_RE.test(uid)) return json({ error: "bad_uid" }, 400);
+  const b = await readJson(request);
+  if (b === null) return json({ error: "invalid_json_body" }, 400);
+  const claim = String(b.claim || "");
+  if (!CLAIM_RE.test(claim)) return json({ error: "bad_claim" }, 400);
+  const name = str(b.name, MAX_NAME).trim();
+  if (!name) return json({ error: "name_required" }, 400);
+  const note = str(b.note, MAX_NOTE).trim() || null;
+
+  const row = await db.prepare("SELECT team_id FROM snack_boards WHERE id = ?").bind(board).first();
+  if (!row) return json({ error: "not_found" }, 404);
+  // Only a game that is actually on the schedule can be taken — the feed is
+  // the list, not the request. Keeps junk rows out of a public table.
+  const team = await db.prepare("SELECT ics_url FROM teams WHERE id = ?").bind(row.team_id).first();
+  const cal = await snackGames(env, team);
+  if (cal.err) return cal.err;
+  if (!cal.events.some((e) => e.uid === uid)) return json({ error: "unknown_game" }, 404);
+
+  // The claim check lives in the UPSERT itself, so two families tapping the
+  // same open game at once resolve in the database, not in a read-then-write.
+  const res = await db.prepare(
+    "INSERT INTO snack_signups (board_id, event_uid, name, note, claim, created_at) VALUES (?, ?, ?, ?, ?, ?) " +
+    "ON CONFLICT(board_id, event_uid) DO UPDATE SET name = excluded.name, note = excluded.note " +
+    "WHERE snack_signups.claim = excluded.claim"
+  ).bind(board, uid, name, note, claim, Date.now()).run();
+  if ((res.meta ? res.meta.changes : 0) === 0) return json({ error: "taken" }, 409);
+  return json({ ok: true });
+}
+
+// DELETE /api/snacks/:board/:uid  { claim } — give a game back. Only the claim
+// that took it can; anything else is indistinguishable from "no such signup".
+async function deleteSignup(db, board, uid, request) {
+  if (!UID_RE.test(uid)) return json({ error: "bad_uid" }, 400);
+  const b = await readJson(request);
+  if (b === null) return json({ error: "invalid_json_body" }, 400);
+  const claim = String(b.claim || "");
+  if (!CLAIM_RE.test(claim)) return json({ error: "bad_claim" }, 400);
+  const res = await db.prepare(
+    "DELETE FROM snack_signups WHERE board_id = ? AND event_uid = ? AND claim = ?"
+  ).bind(board, uid, claim).run();
+  if ((res.meta ? res.meta.changes : 0) === 0) return json({ error: "not_found" }, 404);
+  return json({ ok: true });
 }
 
 /* ============================ web push ============================

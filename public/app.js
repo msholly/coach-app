@@ -432,7 +432,10 @@
     if(!state.lineup){ out.innerHTML='<div class="empty">Mark who\'s present, then <b>Build lineup</b> to see the rotation sheet.</div>'; return; }
     var lu=state.lineup, Q=lu.Q, mp=lu.minsper, gk=lu.gk||[];
     var players=lu.playerOrder.map(function(id){return state.roster.filter(function(p){return p.id===id;})[0];}).filter(Boolean);
-    // "Plays" is actual time, not the plan — a mid-period sub shows up as a fraction.
+    // ponytail: the column shows lu.actual, which is the PLAN (periods each kid
+    // is down to play this game) until finalizeAtElapsed clips it at full time —
+    // so the label is "Scheduled", not "played". The internal key stays `actual`;
+    // renaming it buys nothing and churns the test suite. (§2.1)
     var counts=players.map(function(p){ return lu.actual[p.id]||0; });
     var mx=counts.length?Math.max.apply(null,counts):0;
     var seasons=players.map(function(p){ return totPlayed(lu,p.id); });
@@ -444,7 +447,7 @@
     var posTot=posTotals(lu);
     var head="<tr><th>Player</th>";
     for(var q=0;q<Q;q++){ head+="<th>P"+(q+1)+"</th>"; }
-    head+="<th>Plays</th><th>Season</th><th>D · F</th></tr>";
+    head+="<th>Scheduled</th><th>Season</th><th>D · F</th></tr>";
     var body=players.map(function(p,i){
       var cells="";
       for(var q=0;q<Q;q++){
@@ -1868,6 +1871,8 @@
     else if(act==="new-season"){ startNewSeason(); }
     else if(act==="log-game"){ toggleLogGame(t.dataset.gid); }
     else if(act==="copy-link"){ copyTeamLink(); }
+    else if(act==="snack-link"){ copySnackLink(); }
+    else if(act==="gc-link"){ connectSchedule(); }
     else if(act==="card"){ openCard(t.dataset.id); }
     else if(act==="card-close"){ closeCard(); }
     else if(act==="card-num"){ cardSetNum(); }
@@ -2228,6 +2233,10 @@
     if(!g||!g.gid||!g.startedAt||g.endedAt||!lu) return;
     g.endedAt=nowMs();
     LineupCore.ivClose(lu,curPi());   // a manual full-time end skips periodExpired
+    // Clip the ledgers to elapsed clock time BEFORE anything is banked: a game
+    // that ends early must not archive, or commit to careers, periods that were
+    // never played. No-op at a period boundary / full time (rem 0). (§1.1)
+    LineupCore.finalizeAtElapsed(lu,curPi(),remFrac());
     logEvent("period",{final:true,us:g.us,them:g.them});
     queueGameRow();
     queueAppearances(Math.min(g.period,lu.Q));
@@ -2661,6 +2670,56 @@
     } else { toast("Copy this page's URL to share the team"); }
   }
 
+  // The parents' snack board is a second link, minted once per team on the
+  // server. It is never the team token — that one grants every write to the
+  // doc, which is exactly what a link texted to twelve families must not.
+  // The link is also written under the button: iOS only allows a clipboard
+  // write inside the tap itself, and by the time the fetch returns the tap is
+  // over, so a visible link the coach can long-press is the reliable path.
+  async function copySnackLink(){
+    if(!BACKEND||!TEAM){ toast("The snack sign-up needs the backend — this device is running local-only."); return; }
+    var out=$("#snackLinkOut");
+    try{
+      var r=await authFetch("/api/team/"+encodeURIComponent(TEAM)+"/snacks",{method:"POST",headers:{accept:"application/json"}});
+      if(!r.ok){ toast("Couldn't set up the snack sign-up ("+r.status+")"); return; }
+      var j=await r.json();
+      if(!j.board){ toast("Couldn't set up the snack sign-up"); return; }
+      var url=location.origin+"/snacks#b="+j.board;
+      if(out){
+        out.innerHTML='Parents\' snack sign-up: <a href="'+esc(url)+'" target="_blank" rel="noopener">'+esc(url)+'</a>';
+        out.hidden=false;
+      }
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(url).then(
+          function(){ toast("Snack sign-up link copied — text it to the parents"); },
+          function(){ toast("Long-press the link below to copy it"); });
+      } else { toast("Long-press the link below to copy it"); }
+    }catch(e){ toast("Couldn't set up the snack sign-up"); }
+  }
+
+  // One GameChanger feed per team. The server secret can only describe one
+  // team, so a coach with two pastes each team's "Subscribe to calendar" link
+  // here; it is kept on the team row and wins over the secret. The snack
+  // sign-up's game list comes from whichever applies.
+  async function connectSchedule(){
+    if(!BACKEND||!TEAM){ toast("Connecting a schedule needs the backend — this device is running local-only."); return; }
+    var url=await ask({
+      title:"📅 Connect GameChanger schedule",
+      body:"In GameChanger open the team's Schedule, tap ⋮ → Subscribe to calendar, copy the link and paste it here. The snack sign-up lists this team's games from it.\nType \"disconnect\" to remove a link you set earlier.",
+      input:"", placeholder:"webcal://…", ok:"Connect", cancel:"Cancel"});
+    if(!url) return;
+    var body={url: url.toLowerCase()==="disconnect" ? null : url};
+    try{
+      var r=await authFetch("/api/team/"+encodeURIComponent(TEAM)+"/schedule",{method:"PUT",headers:{"content-type":"application/json",accept:"application/json"},body:JSON.stringify(body)});
+      if(r.status===400){ toast("That doesn't look like a calendar link — it should start with webcal:// or https://"); return; }
+      if(r.status===502){ toast("That link didn't return a calendar — copy it again from GameChanger"); return; }
+      if(!r.ok){ toast("Couldn't save the schedule link ("+r.status+")"); return; }
+      var j=await r.json();
+      if(body.url===null) toast(j.connected?"This team's link removed — using the shared schedule":"Schedule disconnected");
+      else toast("Schedule connected — "+(j.games||0)+" games for the snack sign-up");
+    }catch(e){ toast("Couldn't save the schedule link"); }
+  }
+
   // Format-dependent chrome outside the render cycle: header line, the U8-only
   // checklist item, and which rules card shows.
   function applyFormatChrome(){
@@ -2689,6 +2748,8 @@
     if(tools) tools.hidden=false;
     if(!BACKEND){ setPill("local","Local only — this device"); return; }  // e.g. Claude Artifact: behaves exactly as before
     if(copyBtn) copyBtn.hidden=false;
+    var snackBtn=$("#snackBtn"); if(snackBtn) snackBtn.hidden=false;
+    var gcBtn=$("#gcBtn"); if(gcBtn) gcBtn.hidden=false;
 
     if(!TEAM){
       var last=null; try{ last=localStorage.getItem(BASE+":lastTeam"); }catch(e){}

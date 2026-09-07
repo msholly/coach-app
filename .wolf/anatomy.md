@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-08-11T03:58:26.184Z
-> Files: 94 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-08-12T18:10:21.878Z
+> Files: 96 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
 
@@ -104,14 +104,18 @@
 
 - `azure-research.md` — Azure as a future home — research (~1602 tok)
 - `coaching-guide-audit.md` — Coach's Sideline — audit against the U8 coaching guide (~3807 tok)
+- `codex-second-opinion-prompt.md` — Codex handoff — second-opinion review of Coach's Sideline (~2967 tok)
+- `codex-second-opinion-prompt.md` — Codex handoff prompt: second-opinion review (AYSO flow fidelity, metrics audit, weaknesses, competitive analysis) (~950 tok)
 - `Fall 2026 - Guide for Coaching U8.md` — **Guide for Coaching U8 at AYSO Region 630** (~1461 tok)
 - `firebase-research.md` — Firebase as a future home — research (~1937 tok)
+- `fixes-progress.md` — Fixes progress tracker (~440 tok)
 - `game-day-design-prompt.md` — Game Day UI — design iteration prompt (~1488 tok)
 - `game-day-ui-plan.md` — Game Day UI — plan and adversarial review (~10821 tok)
 - `gamechanger-integration-plan.md` — GameChanger & League Platform Integration — Findings and Plan (~3109 tok)
 - `infrastructure-audit.md` — Infrastructure audit — findings and adversarial review (~3263 tok)
 - `infrastructure-fixes-handoff.md` — Handoff — infrastructure audit fixes (~2464 tok)
 - `on-field-design-prompt.md` — "On the field" — design iteration prompt (~2270 tok)
+- `product-fixes-handoff.md` — Handoff — product review fixes (Codex second opinion) (~4656 tok)
 - `voice-game-log-plan.md` — "Call the game out loud" — voice event log + LLM reporting (~13143 tok)
 
 ## docs/handoffs/design_handoff_game_day_8b/
@@ -140,18 +144,22 @@
 ## migrations/
 
 - `0000_init.sql` — Full D1 schema, applied via `wrangler d1 migrations apply` (db:migrate[:local]). Idempotent (all CREATE TABLE IF NOT EXISTS); folds in the former 0001 venue / 0002 pass_hash ALTERs. (~1174 tok)
+- `0001_snacks.sql` — Snack sign-up tables (snack_boards: one public link per team; snack_signups: one family per game, claim-guarded) + `teams.ics_url` for a per-team GameChanger feed. Plain ALTER, tracked by the migrations framework. (~420 tok)
 
 ## public/
 
 - `_headers` — Security headers for the static app. Workers static assets support _headers (~256 tok)
 - `app.css` — Styles: 61 vars, 9 media queries, 2 animations (~17677 tok)
-- `app.js` — nowMs: fmt, load, loadMeta + 24 more (~43512 tok)
+- `app.js` — nowMs: fmt, load, loadMeta + 24 more (~43661 tok)
 - `diagram.js` — SVG drill diagrams: spec -> markup string. Pure — no DOM, no app state. (~909 tok)
 - `drills.js` — Drill library — static content, no logic. Loaded before app.js; exposes DRILLS. (~2681 tok)
 - `index.html` — Coach's Sideline — U8 AYSO (~6315 tok)
-- `lineup-core.js` — posSplit: tally, appOf, activeEntry + 17 more (~5599 tok)
+- `lineup-core.js` — pure fairness/lineup math: posSplit, tally, playedThrough, finalizeAtElapsed (clip ledgers at game end), appearanceRows + more (~6300 tok)
 - `manifest.webmanifest` (~101 tok)
 - `outbox.js` — load: save, flush (~916 tok)
+- `snacks.css` — Parents' snack board styles on top of app.css: month heading + game card rows, taken/open/yours slot states, inline sign-up form. (~700 tok)
+- `snacks.html` — Parents' snack sign-up page, served at `/snacks#b=<board>`. Separate from the coach app: no manifest/SW/team token; loads app.css + snacks.css + snacks.js. (~450 tok)
+- `snacks.js` — Parents' board logic: board id from hash, per-browser `claim` in localStorage, GET /api/snacks/:board, inline take/change/give-back via PUT/DELETE, month-grouped render. Plain script. (~2300 tok)
 - `state.js` — defaults: fixup, migrate, load (~955 tok)
 - `stats.js` — detailOf: rollupEvents, withTimeFixes (~687 tok)
 - `sw.js` — Shell cache so a cold launch works with no signal (the sideline case). (~820 tok)
@@ -165,12 +173,14 @@
 - `archive.test.mjs` — In-memory stand-in for the archive tables. Statements are matched on the (~2636 tok)
 - `auth.test.mjs` — API routes: GET (5 endpoints) (~2647 tok)
 - `credit.test.mjs` — lineup-core.js is a plain browser script; evaluate it and grab the global. (~3082 tok)
+- `finalize.test.mjs` — §1.1: finalizeAtElapsed clips ledgers to elapsed at early finish; full-time is byte-identical. (~800 tok)
 - `iv.test.mjs` — lineup-core.js is a plain browser script; evaluate it and grab the global. (~2031 tok)
 - `lineup.test.mjs` — lineup-core.js is a plain browser script; evaluate it and grab the global. (~4340 tok)
 - `outbox.test.mjs` — outbox.js is a plain browser script. It reads localStorage and fetch as free (~1504 tok)
 - `played.test.mjs` — lineup-core.js is a plain browser script; evaluate it and grab the global. (~2000 tok)
 - `schedule.test.mjs` — API routes: GET (1 endpoints) (~1752 tok)
 - `season.test.mjs` — src: rng, buildGame, commit + 5 more (~5899 tok)
+- `snacks.test.mjs` — Snack board: mint-once per team, public list (games only, no roster), claim semantics (mine/taken/409/404), coach clear, rate limit key, locked-team gating, per-team feed (PUT schedule, fallback, validation, no URL leak). (~4200 tok)
 - `state.test.mjs` — state.js is a plain browser script: it reads LineupCore and localStorage as (~1689 tok)
 - `stats.test.mjs` — Declares src (~1593 tok)
 - `worker.test.mjs` — Minimal in-memory stand-in for the D1 binding. All first() queries in the worker (~2734 tok)

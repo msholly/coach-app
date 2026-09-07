@@ -46,7 +46,12 @@
             <!-- Sits next to the share link on purpose: the passphrase is a
                  second gate on that link, so the two belong together. -->
             <button class="btn ghost" id="lockBtn" data-act="passphrase" style="flex:0 0 auto" title="Require a passphrase as well as the team link" hidden>🔓 Add a passphrase</button>
+            <!-- A separate, parents-facing link. Never the team link above: that
+                 one is the coach's write capability; this one only sees games and snacks. -->
+            <button class="btn ghost" id="snackBtn" data-act="snack-link" style="flex:0 0 auto" title="A public page where parents pick a game to bring snacks" hidden>🍊 Snack sign-up link</button>
+            <button class="btn ghost" id="gcBtn" data-act="gc-link" style="flex:0 0 auto" title="Paste this team's GameChanger calendar link so the snack sign-up shows its games" hidden>📅 Connect schedule</button>
           </div>
+          <div class="hint no-print" id="snackLinkOut" style="margin:-6px 0 12px;word-break:break-all" hidden></div>
           <ul class="roster" id="rosterList"></ul>
           <div class="hint" id="presentCount" style="margin-top:10px"></div>
           <details class="roster-manage no-print">
