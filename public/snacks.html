@@ -30,6 +30,8 @@
 
   <p class="sn-lead">Pick a game to bring snacks for the team, and volunteer to referee a home game. Everyone with this link sees the same list, so you can see what's still open and who has the rest.</p>
 
+  <p class="sn-refnote">Volunteering to referee? Your team needs a certified 8U referee for its home games. <button type="button" class="linkbtn" id="refHelpBtn">How to get certified &rarr;</button></p>
+
   <div class="sn-status" id="status" hidden></div>
   <div id="list" aria-live="polite"></div>
 
@@ -39,6 +41,31 @@
 </div>
 
 <div id="toast" class="toaststack" aria-live="polite"></div>
+
+<!-- 8U referee certification instructions (from AYSO 630's Quick Reference Guide).
+     Hidden until a parent taps "How to get certified". Images are the AYSOU
+     screenshots that walk through finding the online course. -->
+<div class="modal" id="refHelp" hidden role="dialog" aria-modal="true" aria-labelledby="refHelpTitle">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-card" role="document">
+    <button type="button" class="modal-x" data-close aria-label="Close">&times;</button>
+    <h2 id="refHelpTitle" class="display">Become an 8U referee</h2>
+    <p class="hint">Your team is expected to supply a certified 8U referee for its 5 home games this Fall season. The training is online at AYSO 630, in SportsConnect under AYSOU. Here's how to find it.</p>
+    <ol class="ref-steps">
+      <li>Log into your account at <a href="https://www.ayso630.org/" target="_blank" rel="noopener">ayso630.org</a>.</li>
+      <li>Click the <strong>AYSOU</strong> link on the left-hand side.
+        <img src="/ref-step1.png" alt="AYSOU link in the left-hand navigation" loading="lazy" width="129" height="259"></li>
+      <li>Click <strong>Training Library</strong>.
+        <img src="/ref-step2.png" alt="Training Library menu option" loading="lazy" width="133" height="359"></li>
+      <li>Click <strong>Referees</strong>.</li>
+      <li>Select the <strong>8U Official &ndash; Full Online Course</strong> (also offered in Spanish) and complete it.
+        <img src="/ref-step3.png" alt="8U Official Full Online Course in the training library" loading="lazy" width="624" height="236"></li>
+      <li>Don't forget to also complete the other required AYSO volunteer certifications.</li>
+    </ol>
+    <p class="hint">Questions? Email <a href="mailto:CVPA@ayso630.org">CVPA@ayso630.org</a>.</p>
+    <div class="acts"><button type="button" class="btn" data-close>Got it</button></div>
+  </div>
+</div>
 
 <script src="/snacks.js"></script>
 </body>

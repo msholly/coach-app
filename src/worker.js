@@ -106,6 +106,20 @@ export default {
         return json({ error: "method_not_allowed" }, 405);
       }
 
+      // /api/coach/:cid — the device-sync team list. Like the snack board, the
+      // cid IS the capability (it owns a bundle of team tokens), so it sits
+      // outside gate(): there is no per-team passphrase that could apply to a
+      // cross-team list. Same last-write-wins + baseRev shape as /api/team/:id.
+      const mc = path.match(/^\/api\/coach\/([^/]+)$/);
+      if (mc) {
+        const cid = decodeURIComponent(mc[1]);
+        if (!ID_RE.test(cid)) return json({ error: "bad_coach_id" }, 400);
+        const db = dbOf(env);
+        if (request.method === "GET") return getCoach(db, cid);
+        if (request.method === "PUT") return putCoach(db, cid, request);
+        return json({ error: "method_not_allowed" }, 405, { allow: "GET, PUT" });
+      }
+
       // /api/snacks/:board[/:uid[/ref]] — the parents' side. NOT behind gate():
       // the board id is its own capability, deliberately separate from the team's.
       // A trailing /ref selects the referee slot; anything else is the snack slot.
@@ -213,6 +227,68 @@ async function putTeam(db, id, request, url) {
   }
 
   return json({ id, rev: newRev, updatedAt: now });
+}
+
+/* ===================== coach team-list (device sync) =====================
+   One JSON list-doc per cid, shaped exactly like a team doc: a string `doc`,
+   a `rev`, and optimistic concurrency on baseRev. A missing row is not a 404
+   here — it is an empty list at rev 0 — so a device that links to a cid before
+   anything has been pushed still gets a clean answer to merge against. */
+
+const MAX_COACH_DOC = 64 * 1024;   // a list of {tok,name}; far smaller than a team doc
+
+async function getCoach(db, cid) {
+  const row = await db
+    .prepare("SELECT doc, rev, updated_at FROM coaches WHERE id = ?")
+    .bind(cid)
+    .first();
+  if (!row) return json({ id: cid, doc: null, rev: 0, updatedAt: 0 });
+  return json({ id: cid, doc: row.doc, rev: row.rev, updatedAt: row.updated_at });
+}
+
+async function putCoach(db, cid, request) {
+  const body = await readJson(request);
+  if (body === null) return json({ error: "invalid_json_body" }, 400);
+  const doc = body.doc;
+  if (typeof doc !== "string") return json({ error: "doc_must_be_string" }, 400);
+  if (doc.length > MAX_COACH_DOC) return json({ error: "doc_too_large", maxBytes: MAX_COACH_DOC }, 413);
+  // Must be a JSON array — the client sends [{tok,name}]. Reject junk at the edge.
+  let parsed;
+  try { parsed = JSON.parse(doc); } catch { return json({ error: "doc_not_valid_json" }, 400); }
+  if (!Array.isArray(parsed)) return json({ error: "doc_must_be_array" }, 400);
+
+  const baseRev = Number.isInteger(body.baseRev) ? body.baseRev : null;
+  const cur = await db.prepare("SELECT rev FROM coaches WHERE id = ?").bind(cid).first();
+  const curRev = cur ? cur.rev : 0;
+
+  // Conflict handling mirrors putTeam: the client resolves a 409 by merging the
+  // returned list with its own and retrying (a team-list union is idempotent, so
+  // it converges rather than forcing a "one device wins" choice).
+  if (baseRev !== null && baseRev !== curRev) {
+    const full = await db.prepare("SELECT doc, rev, updated_at FROM coaches WHERE id = ?").bind(cid).first();
+    return json({ error: "conflict", id: cid, doc: full ? full.doc : null, rev: curRev, updatedAt: full ? full.updated_at : null }, 409);
+  }
+
+  const now = Date.now();
+  const newRev = curRev + 1;
+  const guarded = baseRev !== null;
+  const res = guarded
+    ? await db.prepare("UPDATE coaches SET doc = ?, rev = ?, updated_at = ? WHERE id = ? AND rev = ?")
+        .bind(doc, newRev, now, cid, curRev).run()
+    : await db.prepare("UPDATE coaches SET doc = ?, rev = ?, updated_at = ? WHERE id = ?")
+        .bind(doc, newRev, now, cid).run();
+
+  if ((res.meta ? res.meta.changes : 0) === 0) {
+    if (!cur) {
+      await db.prepare("INSERT INTO coaches (id, doc, rev, updated_at, created_at) VALUES (?, ?, ?, ?, ?)")
+        .bind(cid, doc, newRev, now, now).run();
+      return json({ id: cid, rev: newRev, updatedAt: now });
+    }
+    const full = await db.prepare("SELECT doc, rev, updated_at FROM coaches WHERE id = ?").bind(cid).first();
+    return json({ error: "conflict", id: cid, doc: full ? full.doc : null, rev: full ? full.rev : curRev, updatedAt: full ? full.updated_at : null }, 409);
+  }
+
+  return json({ id: cid, rev: newRev, updatedAt: now });
 }
 
 /* ========================= login (team passphrase) =========================

@@ -31,6 +31,20 @@ function makeD1() {
             rows.set(id, { ...ex, doc, rev, updated_at });
             return { success: true, meta: { changes: 1 } };
           }
+          // coaches: same shape as teams, so the conditional/unconditional split
+          // in putCoach is exercised for real against this store too.
+          if (/^\s*INSERT INTO coaches/i.test(s)) {
+            const [id, doc, rev, updated_at, created_at] = this.args;
+            rows.set(id, { id, doc, rev, updated_at, created_at });
+            return { success: true, meta: { changes: 1 } };
+          }
+          if (/^\s*UPDATE coaches SET doc/i.test(s)) {
+            const [doc, rev, updated_at, id, guardRev] = this.args;
+            const ex = rows.get(id);
+            if (!ex || (guardRev !== undefined && ex.rev !== guardRev)) return { success: true, meta: { changes: 0 } };
+            rows.set(id, { ...ex, doc, rev, updated_at });
+            return { success: true, meta: { changes: 1 } };
+          }
           return { success: true, meta: { changes: 0 } };
         },
       };
@@ -183,6 +197,64 @@ test("concurrent writers on the same base rev: the loser gets a 409, not a silen
   const r2 = await put();
   assert.equal(r2.status, 409);                 // second read rev 5; UPDATE WHERE rev=5 matched nothing
   assert.equal((await r2.json()).rev, 6);       // and it hands back the current rev to reconcile
+});
+
+/* ---------- coach team-list (device sync) ---------- */
+
+const CID = "coachAAA111"; // valid: [A-Za-z0-9_-]{8,64}
+const LIST = JSON.stringify([{ tok: "aaaaaaaa", name: "BU8" }, { tok: "bbbbbbbb", name: "BU5" }]);
+
+test("GET coach with no row returns an empty list at rev 0 (not 404)", async () => {
+  const r = await worker.fetch(req(`/api/coach/${CID}`), env());
+  assert.equal(r.status, 200);
+  const g = await r.json();
+  assert.equal(g.doc, null);
+  assert.equal(g.rev, 0);
+});
+
+test("PUT creates the coach list at rev 1, GET returns it", async () => {
+  const e = env();
+  let r = await worker.fetch(req(`/api/coach/${CID}`, {
+    method: "PUT", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ doc: LIST, baseRev: 0 }),
+  }), e);
+  assert.equal(r.status, 200);
+  assert.equal((await r.json()).rev, 1);
+
+  r = await worker.fetch(req(`/api/coach/${CID}`), e);
+  const g = await r.json();
+  assert.equal(g.rev, 1);
+  assert.equal(g.doc, LIST);
+});
+
+test("coach PUT with a stale baseRev conflicts (409) and returns the current list", async () => {
+  const e = env();
+  await worker.fetch(req(`/api/coach/${CID}`, {
+    method: "PUT", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ doc: LIST, baseRev: 0 }),
+  }), e); // rev 1
+  const r = await worker.fetch(req(`/api/coach/${CID}`, {
+    method: "PUT", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ doc: LIST, baseRev: 0 }), // stale
+  }), e);
+  assert.equal(r.status, 409);
+  const c = await r.json();
+  assert.equal(c.rev, 1);
+  assert.equal(c.doc, LIST);
+});
+
+test("coach doc must be a JSON array", async () => {
+  const r = await worker.fetch(req(`/api/coach/${CID}`, {
+    method: "PUT", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ doc: JSON.stringify({ not: "an array" }), baseRev: 0 }),
+  }), env());
+  assert.equal(r.status, 400);
+  assert.equal((await r.json()).error, "doc_must_be_array");
+});
+
+test("coach rejects a bad cid and the wrong method", async () => {
+  assert.equal((await worker.fetch(req("/api/coach/short"), env())).status, 400);
+  assert.equal((await worker.fetch(req(`/api/coach/${CID}`, { method: "DELETE" }), env())).status, 405);
 });
 
 /* ---------- S1: schedule endpoint requires the team to exist ---------- */

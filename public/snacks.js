@@ -235,5 +235,17 @@
   // Another parent may have signed up while this tab sat in the background.
   document.addEventListener("visibilitychange", function () { if (!document.hidden && data) load(); });
 
+  // Referee-certification help modal. Pure DOM, no server round-trip.
+  (function () {
+    var modal = $("#refHelp"), openBtn = $("#refHelpBtn");
+    if (!modal || !openBtn) return;
+    var lastFocus = null;
+    function open() { lastFocus = document.activeElement; modal.hidden = false; var c = modal.querySelector("[data-close]"); if (c) c.focus(); }
+    function close() { modal.hidden = true; if (lastFocus && lastFocus.focus) lastFocus.focus(); }
+    openBtn.addEventListener("click", open);
+    modal.addEventListener("click", function (ev) { if (ev.target.closest("[data-close]")) close(); });
+    document.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && !modal.hidden) close(); });
+  })();
+
   load();
 })();

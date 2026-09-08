@@ -147,6 +147,7 @@
 - `0001_snacks.sql` — Snack sign-up tables (snack_boards: one public link per team; snack_signups: one family per game, claim-guarded) + `teams.ics_url` for a per-team GameChanger feed. Plain ALTER, tracked by the migrations framework. (~420 tok)
 - `0002_referees.sql` — ref_signups table: one volunteer referee per HOME game on the same public board as snacks, claim-guarded like snack_signups (name-only, no note). Worker enforces venue="home". (~180 tok)
 - `0003_ref_toggle.sql` — `snack_boards.referees_enabled` (INTEGER DEFAULT 1): coach's per-team switch for referee sign-up (BU5 = off). Off hides the slot on the parents' board; ref_signups rows are kept. (~120 tok)
+- `0004_coaches.sql` — `coaches` table (id=cid, doc=JSON [{tok,name}], rev, updated_at, created_at): cross-device team-list sync. A third capability token (cid) owns the coach's team list so linked devices show the same teams. Same last-write-wins + rev shape as teams. (~230 tok)
 
 ## public/
 
@@ -161,7 +162,8 @@
 - `outbox.js` — load: save, flush (~916 tok)
 - `snacks.css` — Parents' snack board styles on top of app.css: month heading + game card rows, taken/open/yours slot states, inline sign-up form. (~700 tok)
 - `snacks.html` — Parents' snack sign-up page, served at `/snacks#b=<board>`. Separate from the coach app: no manifest/SW/team token; loads app.css + snacks.css + snacks.js. (~450 tok)
-- `snacks.js` — Parents' board logic: board id from hash, per-browser `claim` in localStorage, GET /api/snacks/:board, inline take/change/give-back via PUT/DELETE, month-grouped render. Plain script. (~2300 tok)
+- `snacks.js` — Parents' board logic: board id from hash, per-browser `claim` in localStorage, GET /api/snacks/:board, inline take/change/give-back via PUT/DELETE, month-grouped render, referee-cert help modal open/close. Plain script. (~2400 tok)
+- `ref-step1.png` / `ref-step2.png` / `ref-step3.png` — AYSOU screenshots for the 8U referee certification how-to modal on the snack board (AYSO 630 QRG). (binary)
 - `state.js` — defaults: fixup, migrate, load (~955 tok)
 - `stats.js` — detailOf: rollupEvents, withTimeFixes (~687 tok)
 - `sw.js` — Shell cache so a cold launch works with no signal (the sideline case). (~820 tok)

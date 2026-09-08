@@ -77,3 +77,38 @@
 .sn-form{margin-top:10px; display:flex; flex-direction:column; gap:8px}
 .sn-form input[type=text]{padding:10px 12px; font-size:16px}   /* 16px: iOS does not zoom */
 .sn-form .acts{display:flex; gap:8px; flex-wrap:wrap}
+
+/* referee-cert note + link to the how-to modal */
+.sn-refnote{margin:-6px 0 18px; color:var(--muted); font-size:14px; max-width:56ch}
+.linkbtn{
+  background:none; border:0; padding:0; font:inherit; cursor:pointer;
+  color:var(--accent-deep); font-weight:700; text-decoration:underline; white-space:nowrap;
+}
+:root[data-theme="dark"] .linkbtn{color:var(--accent)}
+@media (prefers-color-scheme:dark){.linkbtn{color:var(--accent)}}
+
+/* certification instructions modal */
+.modal{position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center; padding:16px}
+.modal-backdrop{position:absolute; inset:0; background:rgba(0,0,0,.5)}
+.modal-card{
+  position:relative; z-index:1; width:100%; max-width:460px; max-height:88vh; overflow-y:auto;
+  background:var(--surface); border:1px solid var(--line); border-radius:var(--r);
+  box-shadow:var(--shadow); padding:22px 22px 20px;
+  /* The modal renders outside .wrap, which is what sets --ink text — so set it here. */
+  color:var(--ink);
+}
+.modal-card a{color:var(--accent-deep)}
+:root[data-theme="dark"] .modal-card a{color:var(--accent)}
+@media (prefers-color-scheme:dark){.modal-card a{color:var(--accent)}}
+.modal-card h2{margin:0 0 6px; font-size:24px; line-height:1.15}
+.modal-x{
+  position:absolute; top:10px; right:12px; background:none; border:0; cursor:pointer;
+  font-size:26px; line-height:1; color:var(--muted); padding:4px 8px;
+}
+.ref-steps{margin:14px 0; padding-left:22px; display:flex; flex-direction:column; gap:12px; font-size:14px}
+.ref-steps li{line-height:1.4}
+.ref-steps img{
+  display:block; margin:8px 0 2px; max-width:100%; height:auto;
+  border:1px solid var(--line); border-radius:8px;
+}
+.modal-card .acts{margin-top:18px}

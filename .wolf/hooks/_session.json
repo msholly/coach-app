@@ -1,48 +1,53 @@
 {
-  "session_id": "session-2026-09-07-1227",
-  "started": "2026-09-07T19:27:37.869Z",
+  "session_id": "session-2026-09-08-2012",
+  "started": "2026-09-08T03:12:44.546Z",
   "files_read": {
+    "c:/Users/msholly/coach-app/public/sw.js": {
+      "count": 1,
+      "tokens": 820,
+      "first_read": "2026-09-08T03:13:40.922Z"
+    },
     "c:/Users/msholly/coach-app/public/app.js": {
-      "count": 8,
+      "count": 7,
       "tokens": 43661,
-      "first_read": "2026-09-07T19:29:38.272Z"
+      "first_read": "2026-09-08T03:21:22.100Z"
+    },
+    "c:/Users/msholly/coach-app/worker.js": {
+      "count": 1,
+      "tokens": 0,
+      "first_read": "2026-09-08T03:53:25.313Z"
     },
     "c:/Users/msholly/coach-app/src/worker.js": {
       "count": 1,
       "tokens": 10357,
-      "first_read": "2026-09-07T19:30:07.204Z"
+      "first_read": "2026-09-08T03:53:31.980Z"
     },
     "c:/Users/msholly/coach-app/public/index.html": {
-      "count": 2,
+      "count": 1,
       "tokens": 6315,
-      "first_read": "2026-09-07T19:30:29.582Z"
+      "first_read": "2026-09-08T04:06:31.107Z"
     },
-    "c:/Users/msholly/coach-app/public/state.js": {
+    "c:/Users/msholly/coach-app/src/worker.test.mjs": {
       "count": 1,
-      "tokens": 955,
-      "first_read": "2026-09-07T19:35:22.812Z"
-    },
-    "c:/Users/msholly/coach-app/public/snacks.js": {
-      "count": 2,
       "tokens": 0,
-      "first_read": "2026-09-07T19:38:39.228Z"
+      "first_read": "2026-09-08T04:06:36.774Z"
     },
-    "c:/Users/msholly/coach-app/test/state.test.mjs": {
+    "c:/Users/msholly/coach-app/test/worker.test.mjs": {
       "count": 1,
-      "tokens": 1689,
-      "first_read": "2026-09-07T19:40:22.349Z"
+      "tokens": 2734,
+      "first_read": "2026-09-08T04:06:42.857Z"
     },
-    "c:/Users/msholly/coach-app/public/outbox.js": {
+    "c:/Users/msholly/coach-app/migrations/0001_snacks.sql": {
       "count": 1,
-      "tokens": 916,
-      "first_read": "2026-09-07T19:44:40.753Z"
+      "tokens": 0,
+      "first_read": "2026-09-08T04:06:49.944Z"
     }
   },
   "files_written": [],
   "edit_counts": {},
-  "anatomy_hits": 6,
-  "anatomy_misses": 1,
-  "repeated_reads_warned": 9,
+  "anatomy_hits": 5,
+  "anatomy_misses": 3,
+  "repeated_reads_warned": 6,
   "cerebrum_warnings": 0,
   "stop_count": 3
 }

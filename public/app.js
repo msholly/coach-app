@@ -3,6 +3,8 @@
   var BASE="ayso-coach-v2";   // localStorage namespace
   var KEY=BASE;               // becomes BASE + ":" + teamId once a team is known
   var TEAM=null;              // team token (also the share-link id); null = local-only
+  var CID_REV=0;              // last-synced rev of the coach team-list (device sync)
+  var linkCid=null;           // a cid arriving in the URL (#c=…) to adopt at boot
 
   /* drill data lives in drills.js (global DRILLS) */
 
@@ -1881,6 +1883,7 @@
     else if(act==="new-season"){ startNewSeason(); }
     else if(act==="log-game"){ toggleLogGame(t.dataset.gid); }
     else if(act==="copy-link"){ copyTeamLink(); }
+    else if(act==="link-device"){ copyDeviceLink(); }
     else if(act==="snack-link"){ copySnackLink(); }
     else if(act==="gc-link"){ connectSchedule(); }
     else if(act==="refresh-games"){ refreshGames(); }
@@ -1943,7 +1946,7 @@
   $("#teamName").addEventListener("input",function(e){
     state.team=e.target.value; save(); var u=$("#usName"); if(u) u.textContent=state.team||"Our team";
     var h=$("#hdrTitle"); if(h) h.textContent=state.team||"Coach's Sideline";
-    if(TEAM){ var l=loadTeamList(); l.forEach(function(t){ if(t.tok===TEAM) t.name=state.team; }); saveTeamList(l); renderTeamSel(); }
+    if(TEAM){ var l=loadTeamList(); l.forEach(function(t){ if(t.tok===TEAM) t.name=state.team; }); saveTeamList(l); renderTeamSel(); scheduleCoachName(); }
   });
   $("#seasonName").addEventListener("input",function(e){ state.season=e.target.value; save(); });
   $("#venue").addEventListener("change",function(e){ state.venue=e.target.value; save(); renderGame(); });
@@ -1988,13 +1991,17 @@
 
   // Erase a team's local footprint and switch to whatever remains. Purely local —
   // the backend copy (if any) is left alone; the link just goes unshared.
-  function deleteTeam(tok){
+  async function deleteTeam(tok){
     var l=loadTeamList().filter(function(t){ return t.tok!==tok; });
     saveTeamList(l);
     var k=BASE+":"+tok;
     ["", ":meta", ":archive"].forEach(function(sfx){ try{ localStorage.removeItem(k+sfx); }catch(e){} });
     var next=l[0]?l[0].tok:null;
     try{ if(next) localStorage.setItem(BASE+":lastTeam",next); else localStorage.removeItem(BASE+":lastTeam"); }catch(e){}
+    // Drop it from the synced list too, or coachSyncPull re-adds it on reload.
+    // Best-effort: offline, the delete stays local and the team reappears next
+    // time this device syncs — acceptable, and the coach can delete again.
+    try{ await coachRemoveTeam(tok); }catch(e){}
     setHashToken(next||"");
     location.reload();
   }
@@ -2316,6 +2323,7 @@
     return s; // 32 hex chars — inside the server's [A-Za-z0-9_-]{8,64}
   }
   function hashToken(){ var m=(location.hash||"").match(/[#&]t=([A-Za-z0-9_-]{8,64})/); return m?m[1]:null; }
+  function hashCid(){ var m=(location.hash||"").match(/[#&]c=([A-Za-z0-9_-]{8,64})/); return m?m[1]:null; }
   // replaceState, and it must not drop the tab the coach is already on
   function setHashToken(tok){
     var h=hashFor(activeTab(),tok);
@@ -2700,6 +2708,95 @@
      the tokens themselves are the only real handle, as the README documents. */
   function loadTeamList(){ try{ return JSON.parse(localStorage.getItem(BASE+":teams"))||[]; }catch(e){ return []; } }
   function saveTeamList(l){ try{ localStorage.setItem(BASE+":teams",JSON.stringify(l)); }catch(e){} }
+
+  /* ---------- coach team-list sync (across a coach's own devices) ----------
+     The team LIST is device-local; only each team's doc syncs. A coach id (cid)
+     — a third capability token, minted per device and shared once via "Link
+     another device" (#c=…) — owns a server copy of the list so every linked
+     device shows the same teams. See migrations/0004_coaches.sql. */
+  function loadCid(){ try{ return localStorage.getItem(BASE+":cid")||""; }catch(e){ return ""; } }
+  function saveCid(c){ try{ localStorage.setItem(BASE+":cid",c); }catch(e){} }
+  function ensureCid(){ var c=loadCid(); if(!c){ c=genToken(); saveCid(c); } return c; }
+  function loadCidRev(){ try{ return +((JSON.parse(localStorage.getItem(BASE+":cidmeta"))||{}).rev)||0; }catch(e){ return 0; } }
+  function saveCidRev(r){ CID_REV=r; try{ localStorage.setItem(BASE+":cidmeta",JSON.stringify({rev:r})); }catch(e){} }
+
+  // Union two lists by token; `base` wins the name when both carry one.
+  function unionTeams(base,extra){
+    var map={}, order=[];
+    function add(t){ if(!t||!t.tok) return;
+      if(!map[t.tok]){ map[t.tok]={tok:t.tok,name:t.name||""}; order.push(t.tok); }
+      else if(!map[t.tok].name && t.name){ map[t.tok].name=t.name; } }
+    (base||[]).forEach(add); (extra||[]).forEach(add);
+    return order.map(function(k){ return map[k]; });
+  }
+
+  // Read-modify-write the server list under a mutate(list)->list function, with
+  // the same baseRev retry the team doc uses. `mutate` returning null aborts.
+  async function coachRmw(mutate){
+    if(!BACKEND) return null;
+    var cid=ensureCid();
+    for(var attempt=0; attempt<4; attempt++){
+      var gr; try{ gr=await fetch("/api/coach/"+encodeURIComponent(cid),{headers:{accept:"application/json"}}); }catch(e){ return null; }
+      if(!gr.ok) return null;
+      var j=await gr.json(); var server=[]; try{ server=j.doc?JSON.parse(j.doc):[]; }catch(e){}
+      saveCidRev(j.rev||0);
+      var next=mutate(server.slice());
+      if(next===null) return null;
+      var pr; try{
+        pr=await fetch("/api/coach/"+encodeURIComponent(cid),{method:"PUT",headers:{"content-type":"application/json"},
+          body:JSON.stringify({doc:JSON.stringify(next),baseRev:CID_REV})});
+      }catch(e){ return null; }
+      if(pr.status===409){ continue; }      // someone else wrote; re-read and retry
+      if(!pr.ok) return null;
+      var out=await pr.json(); saveCidRev(out.rev||0);
+      return next;
+    }
+    return null;
+  }
+
+  // Reconcile this device's list with the server: upload any team the server is
+  // missing (the first-link case — the phone's lone team joins the set), then
+  // adopt the server list as the shared truth. Called at init and on every
+  // foreground, so a team added on another device shows up here.
+  async function coachSyncPull(){
+    if(!BACKEND) return;
+    var cid=ensureCid();
+    var gr; try{ gr=await fetch("/api/coach/"+encodeURIComponent(cid),{headers:{accept:"application/json"}}); }catch(e){ return; }
+    if(!gr.ok) return;
+    var j=await gr.json(); var server=[]; try{ server=j.doc?JSON.parse(j.doc):[]; }catch(e){}
+    saveCidRev(j.rev||0);
+    var local=loadTeamList();
+    var have={}; server.forEach(function(t){ if(t&&t.tok) have[t.tok]=1; });
+    var localOnly=local.filter(function(t){ return t&&t.tok&&!have[t.tok]; });
+    var adopt;
+    if(localOnly.length){
+      var res=await coachRmw(function(srv){ return unionTeams(srv,localOnly); });
+      adopt = res || unionTeams(server,localOnly);
+    } else {
+      adopt = server;
+    }
+    // Keep a local name when the server has none yet, so a just-renamed team
+    // doesn't flash back to "Team ab12cd" before its doc sync catches up.
+    var byLocal={}; local.forEach(function(t){ if(t&&t.tok) byLocal[t.tok]=t; });
+    adopt=adopt.map(function(t){ return (!t.name && byLocal[t.tok] && byLocal[t.tok].name) ? {tok:t.tok,name:byLocal[t.tok].name} : t; });
+    saveTeamList(adopt); renderTeamSel();
+  }
+
+  // Explicit list edits go through rmw so a concurrent device can't clobber them.
+  function coachRemoveTeam(tok){ return coachRmw(function(srv){ return srv.filter(function(t){ return t&&t.tok!==tok; }); }); }
+  var coachNameTimer=null;
+  function scheduleCoachName(){   // renaming fires per keystroke; push the settled name once
+    if(!BACKEND||!TEAM) return;
+    if(coachNameTimer) clearTimeout(coachNameTimer);
+    coachNameTimer=setTimeout(function(){ coachNameTimer=null; coachSetName(TEAM,state.team||""); },1500);
+  }
+  function coachSetName(tok,name){
+    return coachRmw(function(srv){
+      var hit=false, out=srv.map(function(t){ if(t&&t.tok===tok){ hit=true; return {tok:tok,name:name||""}; } return t; });
+      if(!hit) out.push({tok:tok,name:name||""});
+      return out;
+    });
+  }
   function renderTeamSel(){
     var el=$("#teamSel"); if(!el) return;
     var list=loadTeamList();
@@ -2718,6 +2815,19 @@
         function(){ toast("Team link copied — open it on your phone"); },
         function(){ toast("Copy failed — long-press the address bar to copy"); });
     } else { toast("Copy this page's URL to share the team"); }
+  }
+
+  // Copy a device-link (#c=<cid>) to open once on another phone. That device
+  // adopts this cid and both stay in sync from then on. Push the list first so
+  // the link actually has this device's teams to hand over.
+  function copyDeviceLink(){
+    var url=location.origin+"/#c="+ensureCid();
+    coachSyncPull();   // ensure this device's teams are on the server behind the cid
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(url).then(
+        function(){ toast("Device link copied — open it once on your other phone to sync every team",true); },
+        function(){ toast("Copy failed — long-press the address bar to copy this page's URL after adding #c="+ensureCid()); });
+    } else { toast("Open this on your other device: "+url,true); }
   }
 
   // Render the always-visible parents' link under the button: an Open link the
@@ -2928,6 +3038,7 @@
     if(tools) tools.hidden=false;
     if(!BACKEND){ setPill("local","Local only — this device"); return; }  // e.g. Claude Artifact: behaves exactly as before
     if(copyBtn) copyBtn.hidden=false;
+    var linkDeviceBtn=$("#linkDeviceBtn"); if(linkDeviceBtn) linkDeviceBtn.hidden=false;
     var snackBtn=$("#snackBtn"); if(snackBtn) snackBtn.hidden=false;
     var gcBtn=$("#gcBtn"); if(gcBtn) gcBtn.hidden=false;
     var refreshBtn=$("#refreshGamesBtn"); if(refreshBtn) refreshBtn.hidden=false;
@@ -2959,6 +3070,13 @@
     list.forEach(function(t){ if(t.tok===TEAM&&state.team) t.name=state.team; });
     saveTeamList(list); renderTeamSel();
 
+    // Device sync: adopt a cid that arrived in the URL (overwriting this
+    // device's own), then reconcile the team list with the server. Adoption
+    // resets the rev so the merge fetches the linked device's list fresh.
+    if(linkCid){ saveCid(linkCid); saveCidRev(0); linkCid=null; toast("Linked — syncing your teams to this device…",true); }
+    else { CID_REV=loadCidRev(); }
+    coachSyncPull();
+
     setPill("saving","Syncing…");
     await ensureAuth();          // a locked team asks once, here, before anything syncs
     renderAuthBtn();
@@ -2966,13 +3084,14 @@
     renderLog();
     refreshSnackLink();          // show the parents' link straight away if the board is already minted
     loadSchedule();              // fill the Game Day picker with this team's scheduled games
-    window.addEventListener("online", function(){ if(isDirty()) push(); else { pull(); flushOutbox(); } });
-    document.addEventListener("visibilitychange", function(){ if(document.visibilityState==="visible"){ if(isDirty()) push(); else pull(); } });
+    window.addEventListener("online", function(){ if(isDirty()) push(); else { pull(); flushOutbox(); } coachSyncPull(); });
+    document.addEventListener("visibilitychange", function(){ if(document.visibilityState==="visible"){ if(isDirty()) push(); else pull(); coachSyncPull(); } });
   }
 
   /* ---------- boot ---------- */
   function boot(){
     TEAM=hashToken();
+    linkCid=hashCid();          // #c=… : a device-link URL to adopt before syncing the list
     KEY=TEAM?(BASE+":"+TEAM):BASE;
     state=load(); meta=loadMeta();
     if(state.game.secs==null) state.game.secs=state.minsper*60;

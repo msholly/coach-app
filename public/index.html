@@ -53,6 +53,10 @@
               </select>
             </div>
             <button class="btn ghost" id="copyLink" data-act="copy-link" style="flex:0 0 auto" hidden>🔗 Copy team link</button>
+            <!-- One link, opened once on another phone, syncs the coach's whole
+                 team list to it. The cid it carries owns every team, so it is
+                 shared deliberately here, never folded into a team share link. -->
+            <button class="btn ghost" id="linkDeviceBtn" data-act="link-device" style="flex:0 0 auto" title="Copy a link that syncs all your teams to another device" hidden>📲 Link another device</button>
             <!-- Sits next to the share link on purpose: the passphrase is a
                  second gate on that link, so the two belong together. -->
             <button class="btn ghost" id="lockBtn" data-act="passphrase" style="flex:0 0 auto" title="Require a passphrase as well as the team link" hidden>🔓 Add a passphrase</button>
