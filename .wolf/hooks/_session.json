@@ -11,13 +11,18 @@
       "count": 5,
       "tokens": 43661,
       "first_read": "2026-09-13T18:59:54.106Z"
+    },
+    "/home/user/coach-app/package.json": {
+      "count": 1,
+      "tokens": 161,
+      "first_read": "2026-09-13T19:46:48.125Z"
     }
   },
   "files_written": [],
   "edit_counts": {},
-  "anatomy_hits": 2,
+  "anatomy_hits": 3,
   "anatomy_misses": 0,
   "repeated_reads_warned": 4,
   "cerebrum_warnings": 0,
-  "stop_count": 6
+  "stop_count": 8
 }
