@@ -3068,10 +3068,36 @@
       "file": "scratchpad/verify-testgame.mjs",
       "root_cause": "A freshly-booted team writes NOTHING to localStorage[KEY] until the first save(). Opening the app on a new token only detects backend + pulls; with pull() stubbed to 404 nothing persists, so JSON.parse(localStorage.getItem(KEY)) is null before any user action.",
       "fix": "Read the fresh-state facts from the DOM (the #gameSel value reflects g.test via renderGamePicker); only read localStorage[KEY] AFTER the first build-lineup click, which calls save().",
-      "tags": ["headless", "puppeteer", "localStorage", "boot", "verification", "test-game"],
+      "tags": [
+        "headless",
+        "puppeteer",
+        "localStorage",
+        "boot",
+        "verification",
+        "test-game"
+      ],
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-09-07T20:10:00.000Z"
+    },
+    {
+      "id": "bug-184",
+      "timestamp": "2026-09-13T19:04:19.941Z",
+      "error_message": "A game accidentally started as 🧪 Practice that should have counted could not be converted to a real game without losing its player records (season appearances + game row).",
+      "file": "public/app.js",
+      "root_cause": "game.test gated logEvent/queueGameRow/queueAppearances/commitGame; once the practice game ended, closeGameRow is endedAt-guarded so flipping game.test=false via the picker wrote nothing back.",
+      "fix": "pickGame now detects a played game converting practice→real (wasTest && !g.test && g.gid && g.startedAt && lineup) and backfills queueGameRow()+queueAppearances(); careers are left to commitGame at the next lineup build to avoid double-counting; flushOutbox pushes it. Both backfill writes are idempotent.",
+      "tags": [
+        "practice-game",
+        "test-flag",
+        "archive",
+        "appearances",
+        "records",
+        "pickGame"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-09-13T19:04:19.941Z"
     }
   ]
 }

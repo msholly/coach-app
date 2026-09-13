@@ -2883,7 +2883,7 @@
   // Apply the coach's pick to the CURRENT game. Linking a scheduled game pre-fills
   // Home/Away (still hand-overridable) and the opponent, and makes the game count.
   function pickGame(v){
-    var g=state.game;
+    var g=state.game, wasTest=g.test;
     if(v==="__test"){ g.test=true; g.sched=null; }
     else if(v==="__manual"){ g.test=false; g.sched=null; }
     else {
@@ -2895,9 +2895,28 @@
         if(e.venue==="home"||e.venue==="away"){ state.venue=e.venue; var vs=$("#venue"); if(vs) vs.value=e.venue; }
       }
     }
+    // Converting a game that has ALREADY been played from practice → real: while it
+    // was a practice game, logEvent/queueGameRow/queueAppearances were all gated off
+    // and closeGameRow (endedAt-guarded) won't run again, so its archive row and
+    // season appearances would be lost. Backfill them from the ledgers now — both
+    // writes are idempotent (keyed by gid / gid|player|period|pos), so a still-live
+    // game re-queues cleanly at full time. Career ledgers (played/kept) are NOT
+    // banked here: commitGame does that when the next lineup is built, so committing
+    // now would double-count those minutes.
+    var converted = wasTest && !g.test && g.gid && g.startedAt && state.lineup;
+    if(converted){
+      queueGameRow();
+      queueAppearances(g.endedAt ? Math.min(g.period,state.lineup.Q) : curPi()+1);
+    }
     save(); renderGame();
-    toast(g.test?"Practice game — this won't affect season stats"
-      :(g.sched?"Linked "+gameLabel(g.sched)+" — this game counts":"Real game — this game counts"));
+    if(converted){
+      toast((g.sched?"Linked "+gameLabel(g.sched):"Real game")
+        +" — now counts. Score & playing time were backfilled to the season; career credit banks at your next game.",true);
+      flushOutbox();
+    } else {
+      toast(g.test?"Practice game — this won't affect season stats"
+        :(g.sched?"Linked "+gameLabel(g.sched)+" — this game counts":"Real game — this game counts"));
+    }
   }
 
   // Format-dependent chrome outside the render cycle: header line, the U8-only

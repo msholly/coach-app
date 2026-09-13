@@ -1064,3 +1064,9 @@ Reset moved from `.gd-controls` onto the clock row as an edge tag mirroring Edit
 | Time | Action | File(s) | Outcome | ~Tokens |
 |------|--------|---------|---------|--------|
 | 20:05 | Game Day pulls from the GC schedule + practice/test games. Added a "This game" picker (Practice / scheduled games / manual) on the Roster tab; linking a scheduled game sets venue+opponent and makes the game count. Unlinked = a test game (default) that writes nothing to the archive or career ledgers. | public/index.html, public/app.js, public/state.js, public/app.css, public/sw.js (v18) | Suite 149/149; +3 state tests (14/14); headless E2E 16/16 (practice writes 0 rows, linked game archives with opponent) | ~9k |
+
+## Session: 2026-09-13 18:59
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 19:04 | Convert practice→real game: backfill archive row + season appearances in pickGame (careers deferred to next-build) | public/app.js, public/sw.js(v19) | 152/152 tests pass | ~4k |

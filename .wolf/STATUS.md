@@ -8,6 +8,11 @@
 
 ## ✅ Done
 
+### Convert a played 🧪 Practice game → real (backfill records) — 2026-09-13
+- Problem: a game started as Practice that should have counted couldn't be made to count after full-time — `game.test` gated every write path and `closeGameRow` is `endedAt`-guarded, so flipping the picker wrote nothing back.
+- Fix: `pickGame` (`public/app.js`) now detects a **played** game converting practice→real (`wasTest && !g.test && g.gid && g.startedAt && state.lineup`) and backfills `queueGameRow()` + `queueAppearances(...)` (idempotent, keyed), then `flushOutbox()`. Career ledgers (`played`/`kept`) are intentionally NOT committed here — `commitGame` banks them at the next lineup build, so committing now would double-count. `sw.js` → **v19** (shell file changed).
+- Coach action: Roster tab → "This game" picker → pick the scheduled game (or ✏️ Real game — not on the list). Season stats/appearances backfill immediately; career playing-time credit banks when you build your next game's lineup. Suite **152/152**. NOT committed at time of writing.
+
 ### Game Day pulls from the schedule + practice/test games — 2026-09-07
 - **"This game" picker (Roster tab, `#gameSel`):** 🧪 Practice / an optgroup of upcoming scheduled games (from the GC feed) / ✏️ manual real game. `loadSchedule()` fills it from `GET /api/team/:id/schedule`; `renderGamePicker()`/`pickGame()` in `public/app.js`.
 - **Linking a scheduled game** sets `g.sched={uid,opponent,startsAt,venue}`, pre-fills Home/Away (still overridable — feed lags), shows the opponent on the scoreboard (`#themName`), and makes the game **count**. `queueGameRow` now archives the opponent (was always NULL).
