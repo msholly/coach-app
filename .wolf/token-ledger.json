@@ -2,19 +2,19 @@
   "version": 1,
   "created_at": "2026-08-04T00:07:39.727Z",
   "lifetime": {
-    "total_tokens_estimated": 3312305,
-    "total_reads": 501,
+    "total_tokens_estimated": 3401537,
+    "total_reads": 505,
     "total_writes": 1510,
-    "total_sessions": 50,
-    "anatomy_hits": 306,
+    "total_sessions": 51,
+    "anatomy_hits": 310,
     "anatomy_misses": 181,
-    "repeated_reads_blocked": 303,
-    "estimated_savings_vs_bare_cli": 9493894,
-    "real_input_tokens": 3202,
-    "real_output_tokens": 574988,
-    "real_cache_read_tokens": 97994136,
-    "real_cache_creation_tokens": 1416118,
-    "real_api_calls": 716
+    "repeated_reads_blocked": 311,
+    "estimated_savings_vs_bare_cli": 9843982,
+    "real_input_tokens": 3290,
+    "real_output_tokens": 618173,
+    "real_cache_read_tokens": 102182118,
+    "real_cache_creation_tokens": 1556325,
+    "real_api_calls": 760
   },
   "sessions": [
     {
@@ -12017,6 +12017,78 @@
         "cache_read_input_tokens": 10178733,
         "cache_creation_input_tokens": 164464,
         "api_calls": 70
+      }
+    },
+    {
+      "id": "session-2026-09-13-1859",
+      "agent": "claude",
+      "started": "2026-09-13T18:59:31.793Z",
+      "ended": "2026-09-13T19:05:18.254Z",
+      "reads": [
+        {
+          "file": "/home/user/coach-app/public/state.js",
+          "tokens_estimated": 955,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/home/user/coach-app/public/app.js",
+          "tokens_estimated": 43661,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [],
+      "totals": {
+        "input_tokens_estimated": 44616,
+        "output_tokens_estimated": 0,
+        "reads_count": 2,
+        "writes_count": 0,
+        "repeated_reads_blocked": 4,
+        "anatomy_lookups": 2
+      },
+      "real_usage": {
+        "input_tokens": 42,
+        "output_tokens": 20091,
+        "cache_read_input_tokens": 1981767,
+        "cache_creation_input_tokens": 66409,
+        "api_calls": 21
+      }
+    },
+    {
+      "id": "session-2026-09-13-1859",
+      "agent": "claude",
+      "started": "2026-09-13T18:59:31.793Z",
+      "ended": "2026-09-13T19:16:46.318Z",
+      "reads": [
+        {
+          "file": "/home/user/coach-app/public/state.js",
+          "tokens_estimated": 955,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/home/user/coach-app/public/app.js",
+          "tokens_estimated": 43661,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [],
+      "totals": {
+        "input_tokens_estimated": 44616,
+        "output_tokens_estimated": 0,
+        "reads_count": 2,
+        "writes_count": 0,
+        "repeated_reads_blocked": 4,
+        "anatomy_lookups": 2
+      },
+      "real_usage": {
+        "input_tokens": 46,
+        "output_tokens": 23094,
+        "cache_read_input_tokens": 2206215,
+        "cache_creation_input_tokens": 73798,
+        "api_calls": 23
       }
     }
   ],
