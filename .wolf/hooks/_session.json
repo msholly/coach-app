@@ -1,28 +1,12 @@
 {
-  "session_id": "session-2026-09-13-1859",
-  "started": "2026-09-13T18:59:31.793Z",
-  "files_read": {
-    "/home/user/coach-app/public/state.js": {
-      "count": 1,
-      "tokens": 955,
-      "first_read": "2026-09-13T18:59:46.298Z"
-    },
-    "/home/user/coach-app/public/app.js": {
-      "count": 5,
-      "tokens": 43661,
-      "first_read": "2026-09-13T18:59:54.106Z"
-    },
-    "/home/user/coach-app/package.json": {
-      "count": 1,
-      "tokens": 161,
-      "first_read": "2026-09-13T19:46:48.125Z"
-    }
-  },
+  "session_id": "session-2026-09-14-1015",
+  "started": "2026-09-14T17:15:56.525Z",
+  "files_read": {},
   "files_written": [],
   "edit_counts": {},
-  "anatomy_hits": 3,
+  "anatomy_hits": 0,
   "anatomy_misses": 0,
-  "repeated_reads_warned": 4,
+  "repeated_reads_warned": 0,
   "cerebrum_warnings": 0,
-  "stop_count": 10
+  "stop_count": 0
 }

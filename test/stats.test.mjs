@@ -131,3 +131,52 @@ test("withTimeFixes: a corrected goal still counts once in the rollup", () => {
   ];
   assert.equal(A.rollupEvents(evs).p0.goals, 1, "re-timing a goal is not scoring another one");
 });
+
+const near = (a, b) => Math.abs(a - b) < 1e-9;
+
+test("reconstructIv: full periods are solid, a shared slot splits by clock time", () => {
+  const game = { periods: 2, minsper: 10 };
+  const ap = [
+    { player_id: "p0", period: 1, pos: "D", frac: 1 },
+    { player_id: "p3", period: 1, pos: "F", frac: 0.615 },   // started, subbed off
+    { player_id: "p6", period: 1, pos: "F", frac: 0.385 },   // came on
+    { player_id: "p0", period: 2, pos: "D", frac: 1 },
+  ];
+  const evs = [row({ id: "s1", kind: "sub", player_id: "p6", period: 1, secs: 231, detail: { out: "p3", in: "p6" } })];
+  const iv = A.reconstructIv(game, evs, ap);           // 231/600 remaining → 0.615 elapsed
+  assert.deepEqual(iv[0]["p0"], [[0, 1]]);
+  assert.equal(iv[0]["p3"][0][0], 0); assert.ok(near(iv[0]["p3"][0][1], 0.615));
+  assert.ok(near(iv[0]["p6"][0][0], 0.615)); assert.equal(iv[0]["p6"][0][1], 1);
+  assert.deepEqual(iv[1]["p0"], [[0, 1]]);
+  assert.equal(iv[1]["p3"], undefined, "a player who sat the period has no run");
+});
+
+test("reconstructIv: the appearance frac wins over a contradicting event (full credit → solid bar)", () => {
+  const game = { periods: 1, minsper: 10 };
+  const ap = [{ player_id: "p0", period: 1, pos: "D", frac: 1 }, { player_id: "p1", period: 1, pos: "F", frac: 1 }];
+  const evs = [row({ id: "s1", kind: "sub", player_id: "p1", period: 1, secs: 120, detail: { out: "p0", in: "p1" } })];
+  const iv = A.reconstructIv(game, evs, ap);
+  assert.deepEqual(iv[0]["p0"], [[0, 1]], "both credited a full period, so both are solid — the graphic matches the ledger");
+  assert.deepEqual(iv[0]["p1"], [[0, 1]]);
+});
+
+test("reconstructIv: an undone sub is ignored for placement", () => {
+  const game = { periods: 1, minsper: 10 };
+  const ap = [{ player_id: "p3", period: 1, pos: "F", frac: 0.5 }, { player_id: "p6", period: 1, pos: "F", frac: 0.5 }];
+  const evs = [
+    row({ id: "s1", kind: "sub", player_id: "p6", period: 1, secs: 300, detail: { out: "p3", in: "p6" } }),
+    row({ id: "s2", kind: "sub", player_id: "p3", period: 1, secs: 300, detail: { out: "p6", in: "p3", correction: true } }),
+  ];
+  const iv = A.reconstructIv(game, evs, ap);
+  assert.ok(near(iv[0]["p3"][0][1], 0.5)); assert.ok(near(iv[0]["p6"][0][0], 0.5));
+});
+
+test("posByPeriod: primary position is the one with the most of the period", () => {
+  const pos = A.posByPeriod([
+    { player_id: "p0", period: 1, pos: "D", frac: 0.4 },
+    { player_id: "p0", period: 1, pos: "F", frac: 0.6 },
+    { player_id: "p0", period: 2, pos: "GK", frac: 1 },
+  ], 2);
+  assert.equal(pos["p0"][0], "F");    // period 1 (qIndex 0): F wins 0.6 vs 0.4
+  assert.equal(pos["p0"][1], "GK");
+});

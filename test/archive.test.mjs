@@ -10,10 +10,15 @@ function makeDb() {
   function exec(sql, a) {
     if (sql.startsWith("INSERT INTO games")) {
       // Positional — this list must stay in step with postGame's bind() order.
-      const [id, team_id, season, format, started_at, ended_at, opponent, venue, us, them, periods, onfield, minsper] = a;
+      const [id, team_id, season, format, started_at, ended_at, opponent, venue, us, them, periods, onfield, minsper, iv, roster] = a;
       const ex = games.get(id);
-      if (ex) { if (ex.team_id === team_id) Object.assign(ex, { season, ended_at, opponent, venue, us, them }); }
-      else games.set(id, { id, team_id, season, format, started_at, ended_at, opponent, venue, us, them, periods, onfield, minsper });
+      if (ex) {
+        if (ex.team_id === team_id) {
+          Object.assign(ex, { season, ended_at, opponent, venue, us, them });
+          if (iv != null) ex.iv = iv;          // COALESCE(excluded.iv, games.iv)
+          if (roster != null) ex.roster = roster;
+        }
+      } else games.set(id, { id, team_id, season, format, started_at, ended_at, opponent, venue, us, them, periods, onfield, minsper, iv, roster });
     } else if (sql.includes("INTO game_events")) {
       const [id, game_id, at, period, secs, kind, player_id, detail, gid, team] = a;
       const g = games.get(gid);
@@ -36,6 +41,17 @@ function makeDb() {
       const g = games.get(gid);
       if (!g || g.team_id !== team) return [];
       return [...events.values()].filter((e) => e.game_id === gid).sort((x, y) => x.at - y.at);
+    }
+    if (sql.includes("FROM appearances a JOIN games g")) {   // one game's per-period rows
+      const [gid, team] = a;
+      const g = games.get(gid);
+      if (!g || g.team_id !== team) return [];
+      return [...appearances.values()].filter((r) => r.game_id === gid).sort((x, y) => x.period - y.period);
+    }
+    if (sql.includes("SELECT iv, roster FROM games")) {
+      const [gid, team] = a;
+      const g = games.get(gid);
+      return g && g.team_id === team ? [{ iv: g.iv, roster: g.roster }] : [];
     }
     if (sql.includes("FROM appearances")) {
       const [team, season, exclude] = a;
@@ -143,6 +159,25 @@ test("events: idempotent batch append, ownership enforced, ordered read-back", a
   // and the other team reads nothing
   r = await worker.fetch(req(`/api/team/${OTHER}/games/game0001`), env);
   assert.deepEqual((await r.json()).events, []);
+});
+
+test("game detail round-trips iv + roster snapshot + appearances", async () => {
+  const db = makeDb(), env = { DB: db };
+  const iv = [{ p1: [[0, 0.6]] }];
+  const roster = [{ id: "p1", name: "Ada", num: 7 }];
+  await worker.fetch(req(`/api/team/${TEAM}/games`, gameRow({ iv, roster })), env);
+  await worker.fetch(req(`/api/team/${TEAM}/appearances`, {
+    rows: [{ game_id: "game0001", player_id: "p1", period: 1, pos: "F", frac: 0.6 }],
+  }), env);
+  const d = await (await worker.fetch(req(`/api/team/${TEAM}/games/game0001`), env)).json();
+  assert.deepEqual(d.iv, iv, "iv is stored and parsed back");
+  assert.deepEqual(d.roster, roster, "roster snapshot round-trips");
+  assert.equal(d.appearances.length, 1, "the game's per-period appearance rows come back");
+  assert.equal(d.appearances[0].pos, "F");
+  // a mid-game write that omits iv must not wipe the stored one (COALESCE)
+  await worker.fetch(req(`/api/team/${TEAM}/games`, gameRow({ us: 5 })), env);
+  const d2 = await (await worker.fetch(req(`/api/team/${TEAM}/games/game0001`), env)).json();
+  assert.deepEqual(d2.iv, iv, "a later iv-less update keeps the stored iv");
 });
 
 test("appearances: keyed upsert, position ratio query, exclude the live game", async () => {

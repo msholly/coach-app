@@ -463,18 +463,31 @@ async function postGame(db, teamId, request) {
   // Anything not in this set is stored as NULL — "not recorded" must stay
   // distinguishable from "home", or every pre-migration row reads as a home game.
   const venue = b.venue === "home" || b.venue === "away" ? b.venue : null;
+  // Persist the interval ledger verbatim (where inside each period minutes fell).
+  // Cap the JSON so a corrupt/huge blob can't bloat the row; drop it whole rather
+  // than truncate (a half string would be unparseable). A later full-time write
+  // overwrites the mid-game snapshot via the ON CONFLICT update below.
+  // Keep-all-data: store the interval ledger and the roster snapshot verbatim. The
+  // cap is a large sanity bound (a real game's iv is well under 2 KB / an 8-player
+  // roster snapshot a few hundred bytes) — high enough that it never drops real
+  // data, low enough that a corrupt blob can't bloat the row. COALESCE lets a
+  // mid-game write that omits either keep the value already stored.
+  const cap = (v, max) => { if (v == null) return null; const s = JSON.stringify(v); return s.length <= max ? s : null; };
+  const iv = cap(b.iv, 200000);
+  const roster = cap(b.roster, 60000);
   await db.prepare(
-    "INSERT INTO games (id, team_id, season, format, started_at, ended_at, opponent, venue, us, them, periods, onfield, minsper) " +
-    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+    "INSERT INTO games (id, team_id, season, format, started_at, ended_at, opponent, venue, us, them, periods, onfield, minsper, iv, roster) " +
+    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
     "ON CONFLICT(id) DO UPDATE SET season = excluded.season, ended_at = excluded.ended_at, " +
-    "opponent = excluded.opponent, venue = excluded.venue, us = excluded.us, them = excluded.them " +
+    "opponent = excluded.opponent, venue = excluded.venue, us = excluded.us, them = excluded.them, " +
+    "iv = COALESCE(excluded.iv, games.iv), roster = COALESCE(excluded.roster, games.roster) " +
     "WHERE games.team_id = excluded.team_id"
   ).bind(
     String(b.id), teamId, str(b.season, 64), str(b.format, 16), started,
     Number.isFinite(ended) && ended > 0 ? ended : null,
     b.opponent ? str(b.opponent, 80) : null,
     venue,
-    +b.us || 0, +b.them || 0, +b.periods || 0, +b.onfield || 0, +b.minsper || 0
+    +b.us || 0, +b.them || 0, +b.periods || 0, +b.onfield || 0, +b.minsper || 0, iv, roster
   ).run();
   return json({ ok: true, id: String(b.id) });
 }
@@ -536,15 +549,29 @@ async function listGames(db, teamId, url) {
   return json({ games: rs.results || [] });
 }
 
-// One game's events, in order. The JOIN is the ownership check.
+// One game's full detail: events (in order), the per-period appearance rows, and
+// the stored interval ledger. The Season archive's graphical track view needs all
+// three (iv when present, else reconstructed from appearances + sub events). Every
+// query is scoped by team_id so a bad token reads nothing.
 async function getGameEvents(db, teamId, gid) {
   if (!GID_RE.test(gid)) return json({ error: "bad_game_id" }, 400);
-  const rs = await db.prepare(
-    "SELECT e.id, e.game_id, e.at, e.period, e.secs, e.kind, e.player_id, e.detail " +
-    "FROM game_events e JOIN games g ON g.id = e.game_id " +
-    "WHERE e.game_id = ? AND g.team_id = ? ORDER BY e.at LIMIT 2000"
-  ).bind(gid, teamId).all();
-  return json({ events: rs.results || [] });
+  const [ev, ap, gm] = await Promise.all([
+    db.prepare(
+      "SELECT e.id, e.game_id, e.at, e.period, e.secs, e.kind, e.player_id, e.detail " +
+      "FROM game_events e JOIN games g ON g.id = e.game_id " +
+      "WHERE e.game_id = ? AND g.team_id = ? ORDER BY e.at LIMIT 2000"
+    ).bind(gid, teamId).all(),
+    db.prepare(
+      "SELECT a.player_id, a.period, a.pos, a.frac FROM appearances a " +
+      "JOIN games g ON g.id = a.game_id " +
+      "WHERE a.game_id = ? AND g.team_id = ? ORDER BY a.period, a.player_id LIMIT 2000"
+    ).bind(gid, teamId).all(),
+    db.prepare("SELECT iv, roster FROM games WHERE id = ? AND team_id = ?").bind(gid, teamId).all()
+  ]);
+  const g0 = gm.results && gm.results[0];
+  const parse = (s) => { if (!s) return null; try { return JSON.parse(s); } catch (e) { return null; } };
+  return json({ events: ev.results || [], appearances: ap.results || [],
+                iv: parse(g0 && g0.iv), roster: parse(g0 && g0.roster) });
 }
 
 // Season goal/shot totals per player, netted against their own corrections —

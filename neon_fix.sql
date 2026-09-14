@@ -1,0 +1,1 @@
+UPDATE teams SET doc = json_set(doc, '$.played', json('{"seed0":3.56,"seed1":3,"seed2":3,"seed3":2.62,"seed4":3,"seed5":3,"seed6":2.82,"seed7":3}'), '$.kept', json('{"seed0":1,"seed2":1,"seed4":1,"seed6":1}')), rev = 6, updated_at = 1789400000000 WHERE id = 'e8f562e5a55e545f4c9368adf713d301' AND rev = 5;

@@ -148,6 +148,8 @@
 - `0002_referees.sql` — ref_signups table: one volunteer referee per HOME game on the same public board as snacks, claim-guarded like snack_signups (name-only, no note). Worker enforces venue="home". (~180 tok)
 - `0003_ref_toggle.sql` — `snack_boards.referees_enabled` (INTEGER DEFAULT 1): coach's per-team switch for referee sign-up (BU5 = off). Off hides the slot on the parents' board; ref_signups rows are kept. (~120 tok)
 - `0004_coaches.sql` — `coaches` table (id=cid, doc=JSON [{tok,name}], rev, updated_at, created_at): cross-device team-list sync. A third capability token (cid) owns the coach's team list so linked devices show the same teams. Same last-write-wins + rev shape as teams. (~230 tok)
+- `0005_games_iv.sql` — `games.iv` (TEXT, JSON): persists the per-game interval ledger (iv[qIndex]={player_id:[[on,off],…]} in fractions of the period — where inside each period a player's minutes fell). Enables the Season archive's graphical replay of past games and future reports. Was display-only/never archived before. (~90 tok)
+- `0006_games_roster.sql` — `games.roster` (TEXT, JSON): point-in-time roster snapshot [{id,name,num}] stored with each game so a later rename/removal never rewrites who a past game says played. Read by the archive replay for names/order. (~90 tok)
 
 ## public/
 

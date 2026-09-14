@@ -83,6 +83,52 @@ test("flush: rows clear by id, so an unsent row is never dropped by position", a
   assert.deepEqual(left.map((e) => e.id), events.slice(200).map((e) => e.id));
 });
 
+// Same race as the events one, but for the game row: queueGameRow overwrites
+// games[gid] in place on every score/full-time/iv change. Deleting by id after
+// the POST would drop a newer snapshot (final score, end time, iv) unsent.
+test("flush: a game row updated DURING its POST is not deleted unsent", async () => {
+  const store = seeded({ games: { g1: { id: "g1", us: 1 } }, events: [], appearances: {} });
+  let bumped = false;
+  const O = mkOutbox(store, async (url) => {
+    if (url.endsWith("/games") && !bumped) {
+      bumped = true;                              // a goal lands mid-request
+      const ob = store.read(KEY + ":outbox");
+      ob.games.g1 = { id: "g1", us: 2 };
+      store.setItem(KEY + ":outbox", JSON.stringify(ob));
+    }
+    return ok;
+  });
+  await O.flush(KEY, "/api/team/t");
+  assert.deepEqual(store.read(KEY + ":outbox").games, { g1: { id: "g1", us: 2 } }, "the newer snapshot is still queued");
+
+  const posted = [];
+  const O2 = mkOutbox(store, async (url, opts) => { if (url.endsWith("/games")) posted.push(JSON.parse(opts.body).us); return ok; });
+  await O2.flush(KEY, "/api/team/t");
+  assert.deepEqual(posted, [2], "and it posts on the next flush");
+  assert.deepEqual(store.read(KEY + ":outbox").games, {});
+});
+
+test("flush: an appearance re-split DURING its POST is re-posted, not dropped", async () => {
+  const K = "g1|p0|1|D";
+  const store = seeded({ games: {}, events: [], appearances: { [K]: { game_id: "g1", player_id: "p0", period: 1, pos: "D", frac: 1 } } });
+  let bumped = false; const posted = [];
+  const O = mkOutbox(store, async (url, opts) => {
+    if (url.endsWith("/appearances")) {
+      posted.push(...JSON.parse(opts.body).rows.map((r) => r.frac));
+      if (!bumped) {                              // a re-split lands mid-request
+        bumped = true;
+        const ob = store.read(KEY + ":outbox");
+        ob.appearances[K] = { game_id: "g1", player_id: "p0", period: 1, pos: "D", frac: 0.5 };
+        store.setItem(KEY + ":outbox", JSON.stringify(ob));
+      }
+    }
+    return ok;
+  });
+  await O.flush(KEY, "/api/team/t");
+  assert.ok(posted.includes(0.5), "the re-split frac reached the server (not cleared with the stale value)");
+  assert.deepEqual(store.read(KEY + ":outbox").appearances, {}, "queue drained after the newer value posted");
+});
+
 test("flush: a failed game row holds its events and appearances back", async () => {
   const store = seeded({
     games: { g1: { id: "g1" } },

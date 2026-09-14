@@ -3098,6 +3098,93 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-09-13T19:04:19.941Z"
+    },
+    {
+      "id": "bug-185",
+      "timestamp": "2026-09-13T00:00:00.000Z",
+      "error_message": "Sept 12 Neon Ninjas game showed in season records with playing time but no event log / scorer stats — game_events had 0 rows, so no goals/assists/shots and an empty per-game timeline.",
+      "file": "game_events (remote production D1 coach-sideline-db)",
+      "root_cause": "The game's archive (games+appearances) and career ledger were moved/seeded to Neon Ninjas by prior sessions, but game_events was never synced — the events live in the client outbox and were never flushed for this game, so the season scorer aggregation (worker getStats) and the Season-tab timeline (logEventsHtml) had nothing.",
+      "fix": "Reconstructed 8 game_events from the coach's screenshots via INSERT OR IGNORE on remote production: 4 mid-period subs, Reyansh's P4 3:05 goal (side=us, d=1, player_id=seed4), 2 opponent goals (player_id NULL, periods/times placeholder), and a full-time period row (1-2). Verified: getStats returns Reyansh 1 goal. Appearances/career ledger left untouched (already correct) to avoid double-counting.",
+      "tags": [
+        "neon-ninjas",
+        "game_events",
+        "data-repair",
+        "production",
+        "records",
+        "scorer-stats"
+      ],
+      "related_bugs": ["bug-184"],
+      "occurrences": 1,
+      "last_seen": "2026-09-13T00:00:00.000Z"
+    },
+    {
+      "id": "bug-186",
+      "timestamp": "2026-09-13T00:00:00.000Z",
+      "error_message": "Season Archive shows 'No events recorded.' for the 9/12 game even though the server returns 8 events and Season Leaders shows the goal.",
+      "file": "public/app.js",
+      "root_cause": "toggleLogGame guard `!arch.events[gid]` never refetches when the cached value is an empty array ([] is truthy, so ![] is false). A game expanded before its events synced caches [] in localStorage and pins 'No events recorded.' forever.",
+      "fix": "Changed the guard to refetch when the cached list is missing OR empty: `(!cached || !cached.length)`. Bumped sw.js CACHE v19->v20 so clients pull the new shell. Data was correct server-side (live GET returned 8 events) — this was purely a client cache/display bug, not a data or backdate problem.",
+      "tags": [
+        "season-archive",
+        "cache",
+        "display",
+        "localStorage",
+        "game_events",
+        "toggleLogGame",
+        "sw-bump"
+      ],
+      "related_bugs": ["bug-185"],
+      "occurrences": 1,
+      "last_seen": "2026-09-13T00:00:00.000Z"
+    },
+    {
+      "id": "bug-187",
+      "timestamp": "2026-09-13T00:00:00.000Z",
+      "error_message": "Adversarial review: converting a played practice game to real permanently loses its event log (subs, keeper swaps, shots, goals, clock). Same loss class that forced reconstructing 9/12 from screenshots.",
+      "file": "public/app.js",
+      "root_cause": "logEvent skipped the outbox entirely for a practice game (game.test), and no full event list was kept anywhere durable (g.recent is only the last 8). pickGame's practice->real backfill wrote the game row + appearances but had no events to backfill.",
+      "fix": "logEvent now buffers every practice event into a local per-game array g.plog (reset per new game). pickGame conversion moves g.plog into the outbox (game_id-scoped) before queueGameRow, then flushOutbox posts the game row first, then the events.",
+      "tags": ["practice-game", "event-log", "data-loss", "logEvent", "pickGame", "outbox", "keep-all-data"],
+      "related_bugs": ["bug-184", "bug-185"],
+      "occurrences": 1,
+      "last_seen": "2026-09-13T00:00:00.000Z"
+    },
+    {
+      "id": "bug-188",
+      "timestamp": "2026-09-13T00:00:00.000Z",
+      "error_message": "Adversarial review: an in-flight game-row POST can erase a newer snapshot. Outbox.flush deletes the queued game by id after the POST; a score/full-time/iv update during the request is deleted unsent.",
+      "file": "public/outbox.js",
+      "root_cause": "The games loop captured the row, awaited the POST, then delete-by-id unconditionally. queueGameRow overwrites games[gid] in place on every change, so a mid-flight update was clobbered. Same race the events path already guarded. Appearances had the same defect.",
+      "fix": "Clear the queued game only if JSON.stringify(current)===JSON.stringify(posted); a changed row stays queued and re-posts next flush (idempotent upsert). Applied the same value-match guard to the appearances drain.",
+      "tags": ["outbox", "race", "data-loss", "flush", "game-row", "appearances"],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-09-13T00:00:00.000Z"
+    },
+    {
+      "id": "bug-189",
+      "timestamp": "2026-09-13T00:00:00.000Z",
+      "error_message": "Adversarial review: an early manual full-time archives an inaccurate interval ledger. iv can say a player played a whole period when their appearance credit is 0.5.",
+      "file": "public/lineup-core.js",
+      "root_cause": "closeGameRow called ivClose (which closed open runs at 1) BEFORE finalizeAtElapsed, and finalizeAtElapsed clips appearances but never touched iv.",
+      "fix": "ivClose takes an optional cap (default 1); it closes open runs at cap and drops runs starting after it. closeGameRow now passes 1-remFrac() so iv is clipped to the same elapsed point finalizeAtElapsed banks. No-op at real full time.",
+      "tags": ["iv", "ivClose", "closeGameRow", "early-finish", "archive", "interval-ledger"],
+      "related_bugs": ["bug-176"],
+      "occurrences": 1,
+      "last_seen": "2026-09-13T00:00:00.000Z"
+    },
+    {
+      "id": "bug-190",
+      "timestamp": "2026-09-13T00:00:00.000Z",
+      "error_message": "Adversarial review: a device with the old events-only archive cache never loads the new graphical replay data (appearances/iv), so tracks stay missing. Also postGame silently dropped iv over 40k, and the archive stored player IDs with no historical roster snapshot.",
+      "file": "public/app.js",
+      "root_cause": "toggleLogGame refetched game detail only when cached events were absent/empty; a pre-track-view cache has events but no arch.appear[gid]. Separately, iv cap was a silent 40k drop and no roster snapshot was kept, so a rename/removal rewrote history.",
+      "fix": "Refetch when arch.appear[gid]===undefined too. Raised postGame iv cap to 200k. Added games.roster (migration 0006): queueGameRow snapshots id->name/num, getGameEvents returns it, gameTracksHtml uses it for names/order (falls back to live roster).",
+      "tags": ["cache", "archive", "toggleLogGame", "iv-cap", "roster-snapshot", "keep-all-data"],
+      "related_bugs": ["bug-186"],
+      "occurrences": 1,
+      "last_seen": "2026-09-13T00:00:00.000Z"
     }
   ]
 }

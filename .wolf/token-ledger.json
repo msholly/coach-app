@@ -2,19 +2,19 @@
   "version": 1,
   "created_at": "2026-08-04T00:07:39.727Z",
   "lifetime": {
-    "total_tokens_estimated": 3758948,
-    "total_reads": 524,
+    "total_tokens_estimated": 4598758,
+    "total_reads": 611,
     "total_writes": 1510,
-    "total_sessions": 56,
-    "anatomy_hits": 329,
-    "anatomy_misses": 181,
-    "repeated_reads_blocked": 343,
-    "estimated_savings_vs_bare_cli": 11244934,
-    "real_input_tokens": 3822,
-    "real_output_tokens": 854633,
-    "real_cache_read_tokens": 132413178,
-    "real_cache_creation_tokens": 2522146,
-    "real_api_calls": 1036
+    "total_sessions": 59,
+    "anatomy_hits": 392,
+    "anatomy_misses": 205,
+    "repeated_reads_blocked": 425,
+    "estimated_savings_vs_bare_cli": 14209654,
+    "real_input_tokens": 5042,
+    "real_output_tokens": 1662642,
+    "real_cache_read_tokens": 231187535,
+    "real_cache_creation_tokens": 4189657,
+    "real_api_calls": 1646
   },
   "sessions": [
     {
@@ -12395,6 +12395,792 @@
         "cache_read_input_tokens": 4983692,
         "cache_creation_input_tokens": 246205,
         "api_calls": 43
+      }
+    },
+    {
+      "id": "session-2026-09-13-1859",
+      "agent": "claude",
+      "started": "2026-09-13T18:59:31.793Z",
+      "ended": "2026-09-14T00:18:02.662Z",
+      "reads": [
+        {
+          "file": "/home/user/coach-app/public/state.js",
+          "tokens_estimated": 955,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/home/user/coach-app/public/app.js",
+          "tokens_estimated": 43661,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/home/user/coach-app/package.json",
+          "tokens_estimated": 161,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [],
+      "totals": {
+        "input_tokens_estimated": 44777,
+        "output_tokens_estimated": 0,
+        "reads_count": 3,
+        "writes_count": 0,
+        "repeated_reads_blocked": 4,
+        "anatomy_lookups": 3
+      },
+      "real_usage": {
+        "input_tokens": 28,
+        "output_tokens": 12277,
+        "cache_read_input_tokens": 1001554,
+        "cache_creation_input_tokens": 46836,
+        "api_calls": 14
+      }
+    },
+    {
+      "id": "session-2026-09-13-1859",
+      "agent": "claude",
+      "started": "2026-09-13T18:59:31.793Z",
+      "ended": "2026-09-14T00:29:11.970Z",
+      "reads": [
+        {
+          "file": "/home/user/coach-app/public/state.js",
+          "tokens_estimated": 955,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/home/user/coach-app/public/app.js",
+          "tokens_estimated": 43661,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/home/user/coach-app/package.json",
+          "tokens_estimated": 161,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/public/app.js",
+          "tokens_estimated": 43661,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [],
+      "totals": {
+        "input_tokens_estimated": 88438,
+        "output_tokens_estimated": 0,
+        "reads_count": 4,
+        "writes_count": 0,
+        "repeated_reads_blocked": 4,
+        "anatomy_lookups": 4
+      },
+      "real_usage": {
+        "input_tokens": 48,
+        "output_tokens": 23824,
+        "cache_read_input_tokens": 1903940,
+        "cache_creation_input_tokens": 62333,
+        "api_calls": 24
+      }
+    },
+    {
+      "id": "session-2026-09-13-1859",
+      "agent": "claude",
+      "started": "2026-09-13T18:59:31.793Z",
+      "ended": "2026-09-14T01:02:11.969Z",
+      "reads": [
+        {
+          "file": "/home/user/coach-app/public/state.js",
+          "tokens_estimated": 955,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/home/user/coach-app/public/app.js",
+          "tokens_estimated": 43661,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/home/user/coach-app/package.json",
+          "tokens_estimated": 161,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/public/app.js",
+          "tokens_estimated": 43661,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/migrations/0000_init.sql",
+          "tokens_estimated": 1174,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [],
+      "totals": {
+        "input_tokens_estimated": 89612,
+        "output_tokens_estimated": 0,
+        "reads_count": 5,
+        "writes_count": 0,
+        "repeated_reads_blocked": 4,
+        "anatomy_lookups": 5
+      },
+      "real_usage": {
+        "input_tokens": 72,
+        "output_tokens": 37040,
+        "cache_read_input_tokens": 3213609,
+        "cache_creation_input_tokens": 82477,
+        "api_calls": 36
+      }
+    },
+    {
+      "id": "session-2026-09-13-1859",
+      "agent": "claude",
+      "started": "2026-09-13T18:59:31.793Z",
+      "ended": "2026-09-14T01:20:32.124Z",
+      "reads": [
+        {
+          "file": "/home/user/coach-app/public/state.js",
+          "tokens_estimated": 955,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/home/user/coach-app/public/app.js",
+          "tokens_estimated": 43661,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/home/user/coach-app/package.json",
+          "tokens_estimated": 161,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/public/app.js",
+          "tokens_estimated": 43661,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/migrations/0000_init.sql",
+          "tokens_estimated": 1174,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/AppData/Local/Temp/claude/c--Users-msholly-coach-app/06c05917-a026-47de-8351-da121303214b/scratchpad/neon_doc.json",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [],
+      "totals": {
+        "input_tokens_estimated": 89612,
+        "output_tokens_estimated": 0,
+        "reads_count": 6,
+        "writes_count": 0,
+        "repeated_reads_blocked": 6,
+        "anatomy_lookups": 5
+      },
+      "real_usage": {
+        "input_tokens": 114,
+        "output_tokens": 72202,
+        "cache_read_input_tokens": 6202885,
+        "cache_creation_input_tokens": 128260,
+        "api_calls": 57
+      }
+    },
+    {
+      "id": "session-2026-09-13-1859",
+      "agent": "claude",
+      "started": "2026-09-13T18:59:31.793Z",
+      "ended": "2026-09-14T01:29:46.569Z",
+      "reads": [
+        {
+          "file": "/home/user/coach-app/public/state.js",
+          "tokens_estimated": 955,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/home/user/coach-app/public/app.js",
+          "tokens_estimated": 43661,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/home/user/coach-app/package.json",
+          "tokens_estimated": 161,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/public/app.js",
+          "tokens_estimated": 43661,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/migrations/0000_init.sql",
+          "tokens_estimated": 1174,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/AppData/Local/Temp/claude/c--Users-msholly-coach-app/06c05917-a026-47de-8351-da121303214b/scratchpad/neon_doc.json",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [],
+      "totals": {
+        "input_tokens_estimated": 89612,
+        "output_tokens_estimated": 0,
+        "reads_count": 6,
+        "writes_count": 0,
+        "repeated_reads_blocked": 6,
+        "anatomy_lookups": 5
+      },
+      "real_usage": {
+        "input_tokens": 116,
+        "output_tokens": 74182,
+        "cache_read_input_tokens": 6367871,
+        "cache_creation_input_tokens": 130079,
+        "api_calls": 58
+      }
+    },
+    {
+      "id": "session-2026-09-13-1859",
+      "agent": "claude",
+      "started": "2026-09-13T18:59:31.793Z",
+      "ended": "2026-09-14T01:31:42.546Z",
+      "reads": [
+        {
+          "file": "/home/user/coach-app/public/state.js",
+          "tokens_estimated": 955,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/home/user/coach-app/public/app.js",
+          "tokens_estimated": 43661,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/home/user/coach-app/package.json",
+          "tokens_estimated": 161,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/public/app.js",
+          "tokens_estimated": 43661,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/migrations/0000_init.sql",
+          "tokens_estimated": 1174,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/AppData/Local/Temp/claude/c--Users-msholly-coach-app/06c05917-a026-47de-8351-da121303214b/scratchpad/neon_doc.json",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [],
+      "totals": {
+        "input_tokens_estimated": 89612,
+        "output_tokens_estimated": 0,
+        "reads_count": 6,
+        "writes_count": 0,
+        "repeated_reads_blocked": 6,
+        "anatomy_lookups": 5
+      },
+      "real_usage": {
+        "input_tokens": 120,
+        "output_tokens": 78957,
+        "cache_read_input_tokens": 6703910,
+        "cache_creation_input_tokens": 135702,
+        "api_calls": 60
+      }
+    },
+    {
+      "id": "session-2026-09-14-1942",
+      "agent": "claude",
+      "started": "2026-09-14T02:42:51.961Z",
+      "ended": "2026-09-14T02:59:02.719Z",
+      "reads": [
+        {
+          "file": "c:/Users/msholly/coach-app/HANDOFF-neon-ninjas-fix.md",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "c:/Users/msholly/coach-app/neon_fix.sql",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "c:/Users/msholly/coach-app/package.json",
+          "tokens_estimated": 161,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "c:/Users/msholly/coach-app/wrangler.jsonc",
+          "tokens_estimated": 524,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/public/app.js",
+          "tokens_estimated": 43661,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/public/stats.js",
+          "tokens_estimated": 687,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/src/worker.js",
+          "tokens_estimated": 10357,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/.wolf/buglog.json",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [],
+      "totals": {
+        "input_tokens_estimated": 55390,
+        "output_tokens_estimated": 0,
+        "reads_count": 8,
+        "writes_count": 0,
+        "repeated_reads_blocked": 2,
+        "anatomy_lookups": 5
+      },
+      "real_usage": {
+        "input_tokens": 56,
+        "output_tokens": 41118,
+        "cache_read_input_tokens": 3376438,
+        "cache_creation_input_tokens": 120745,
+        "api_calls": 28
+      }
+    },
+    {
+      "id": "session-2026-09-14-1942",
+      "agent": "claude",
+      "started": "2026-09-14T02:42:51.961Z",
+      "ended": "2026-09-14T03:06:34.882Z",
+      "reads": [
+        {
+          "file": "c:/Users/msholly/coach-app/HANDOFF-neon-ninjas-fix.md",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "c:/Users/msholly/coach-app/neon_fix.sql",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "c:/Users/msholly/coach-app/package.json",
+          "tokens_estimated": 161,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "c:/Users/msholly/coach-app/wrangler.jsonc",
+          "tokens_estimated": 524,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/public/app.js",
+          "tokens_estimated": 43661,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/public/stats.js",
+          "tokens_estimated": 687,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/src/worker.js",
+          "tokens_estimated": 10357,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/.wolf/buglog.json",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [],
+      "totals": {
+        "input_tokens_estimated": 55390,
+        "output_tokens_estimated": 0,
+        "reads_count": 8,
+        "writes_count": 0,
+        "repeated_reads_blocked": 4,
+        "anatomy_lookups": 5
+      },
+      "real_usage": {
+        "input_tokens": 74,
+        "output_tokens": 53297,
+        "cache_read_input_tokens": 4857303,
+        "cache_creation_input_tokens": 134904,
+        "api_calls": 37
+      }
+    },
+    {
+      "id": "session-2026-09-14-1942",
+      "agent": "claude",
+      "started": "2026-09-14T02:42:51.961Z",
+      "ended": "2026-09-14T03:48:21.585Z",
+      "reads": [
+        {
+          "file": "c:/Users/msholly/coach-app/HANDOFF-neon-ninjas-fix.md",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "c:/Users/msholly/coach-app/neon_fix.sql",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "c:/Users/msholly/coach-app/package.json",
+          "tokens_estimated": 161,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "c:/Users/msholly/coach-app/wrangler.jsonc",
+          "tokens_estimated": 524,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/public/app.js",
+          "tokens_estimated": 43661,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/public/stats.js",
+          "tokens_estimated": 687,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/src/worker.js",
+          "tokens_estimated": 10357,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/.wolf/buglog.json",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/.wolf/cerebrum.md",
+          "tokens_estimated": 0,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/public/app.css",
+          "tokens_estimated": 17677,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/test/stats.test.mjs",
+          "tokens_estimated": 1593,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/.wolf/anatomy.md",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [],
+      "totals": {
+        "input_tokens_estimated": 74660,
+        "output_tokens_estimated": 0,
+        "reads_count": 12,
+        "writes_count": 0,
+        "repeated_reads_blocked": 11,
+        "anatomy_lookups": 7
+      },
+      "real_usage": {
+        "input_tokens": 158,
+        "output_tokens": 120099,
+        "cache_read_input_tokens": 15189044,
+        "cache_creation_input_tokens": 247907,
+        "api_calls": 79
+      }
+    },
+    {
+      "id": "session-2026-09-14-1942",
+      "agent": "claude",
+      "started": "2026-09-14T02:42:51.961Z",
+      "ended": "2026-09-14T04:12:45.325Z",
+      "reads": [
+        {
+          "file": "c:/Users/msholly/coach-app/HANDOFF-neon-ninjas-fix.md",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "c:/Users/msholly/coach-app/neon_fix.sql",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "c:/Users/msholly/coach-app/package.json",
+          "tokens_estimated": 161,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "c:/Users/msholly/coach-app/wrangler.jsonc",
+          "tokens_estimated": 524,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/public/app.js",
+          "tokens_estimated": 43661,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/public/stats.js",
+          "tokens_estimated": 687,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/src/worker.js",
+          "tokens_estimated": 10357,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/.wolf/buglog.json",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/.wolf/cerebrum.md",
+          "tokens_estimated": 0,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/public/app.css",
+          "tokens_estimated": 17677,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/test/stats.test.mjs",
+          "tokens_estimated": 1593,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/.wolf/anatomy.md",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [],
+      "totals": {
+        "input_tokens_estimated": 74660,
+        "output_tokens_estimated": 0,
+        "reads_count": 12,
+        "writes_count": 0,
+        "repeated_reads_blocked": 11,
+        "anatomy_lookups": 7
+      },
+      "real_usage": {
+        "input_tokens": 160,
+        "output_tokens": 120611,
+        "cache_read_input_tokens": 15472946,
+        "cache_creation_input_tokens": 249144,
+        "api_calls": 80
+      }
+    },
+    {
+      "id": "session-2026-09-14-1942",
+      "agent": "claude",
+      "started": "2026-09-14T02:42:51.961Z",
+      "ended": "2026-09-14T05:07:43.683Z",
+      "reads": [
+        {
+          "file": "c:/Users/msholly/coach-app/HANDOFF-neon-ninjas-fix.md",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "c:/Users/msholly/coach-app/neon_fix.sql",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "c:/Users/msholly/coach-app/package.json",
+          "tokens_estimated": 161,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "c:/Users/msholly/coach-app/wrangler.jsonc",
+          "tokens_estimated": 524,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/public/app.js",
+          "tokens_estimated": 43661,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/public/stats.js",
+          "tokens_estimated": 687,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/src/worker.js",
+          "tokens_estimated": 10357,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/.wolf/buglog.json",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/.wolf/cerebrum.md",
+          "tokens_estimated": 0,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/public/app.css",
+          "tokens_estimated": 17677,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/test/stats.test.mjs",
+          "tokens_estimated": 1593,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/.wolf/anatomy.md",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/public/outbox.js",
+          "tokens_estimated": 916,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/public/lineup-core.js",
+          "tokens_estimated": 6300,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/test/archive.test.mjs",
+          "tokens_estimated": 2636,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/test/outbox.test.mjs",
+          "tokens_estimated": 1504,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "C:/Users/msholly/coach-app/test/iv.test.mjs",
+          "tokens_estimated": 2031,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [],
+      "totals": {
+        "input_tokens_estimated": 88047,
+        "output_tokens_estimated": 0,
+        "reads_count": 17,
+        "writes_count": 0,
+        "repeated_reads_blocked": 24,
+        "anatomy_lookups": 12
+      },
+      "real_usage": {
+        "input_tokens": 274,
+        "output_tokens": 174402,
+        "cache_read_input_tokens": 34484857,
+        "cache_creation_input_tokens": 329124,
+        "api_calls": 137
       }
     }
   ],

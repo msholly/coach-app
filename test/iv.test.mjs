@@ -151,3 +151,22 @@ test("older docs: ensureIv synthesizes whole-period runs and a live-period sub s
   LC.ivTruncate(lu, 1);
   assert.equal(lu.iv.length, 1);
 });
+
+// An early manual full-time ends mid-period. ivClose(cap) must close open runs at
+// the elapsed fraction, so the archived iv matches the playing time finalizeAtElapsed
+// banks — not a full period a player only played half of.
+test("ivClose: an early full-time caps open runs at the elapsed fraction, not 1", () => {
+  const lu = { iv: [{ p0: [[0, null]], p1: [[0, 0.3]], p2: [[0.8, null]] }] };
+  LC.ivClose(lu, 0, 0.6);            // period ended 60% through
+  assertRuns(runsOf(lu, 0, "p0"), [[0, 0.6]], "open run closed at the cap");
+  assertRuns(runsOf(lu, 0, "p1"), [[0, 0.3]], "a run ending before the cap is untouched");
+  assert.equal(runsOf(lu, 0, "p2").length, 0, "a run starting after the cap disappears");
+  assert.equal(lu.iv[0].p2, undefined, "and its now-empty entry is removed");
+});
+
+test("ivClose: default cap is 1 — full-period behaviour unchanged", () => {
+  const lu = { iv: [{ p0: [[0, null]], p1: [[0.5, null]] }] };
+  LC.ivClose(lu, 0);
+  assertRuns(runsOf(lu, 0, "p0"), [[0, 1]], "open run closed at 1");
+  assertRuns(runsOf(lu, 0, "p1"), [[0.5, 1]], "later open run closed at 1");
+});

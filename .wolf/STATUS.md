@@ -8,6 +8,13 @@
 
 ## ✅ Done
 
+### Season archive — graphical game replay + persist lu.iv — 2026-09-13
+- Expanding a game on the Season tab now shows a per-player interval-track grid (the same bars Game Day draws live) above the text log: where inside each period each player's minutes fell, position per period, ⚽ goal markers, opponent-goal row. `gameTracksHtml` (app.js) reuses `trackHtml` with `{Q,iv}` + `api=Q,pt=0`; light-on-dark palette `.gtrk-*` (app.css).
+- **Kept all generated data (user pref):** `migrations/0005_games_iv.sql` adds `games.iv` (JSON interval ledger). `queueGameRow` archives `iv:lu.iv`; `postGame` stores it (`COALESCE(excluded.iv,games.iv)`); `GET /games/:gid` now returns `{events,appearances,iv}`. Past games without iv reconstruct from appearances+events via `ArchiveStats.reconstructIv` (frac is authoritative; sub `secs` place partial runs).
+- Also fixed: Season archive "No events recorded" empty-cache bug (`toggleLogGame` refetches when cached events [] OR appearances absent) + sw v20→**v22**.
+- **Adversarial-review hardening (2026-09-13):** practice games buffer their event log in `g.plog` and drain to the outbox on practice→real conversion (no more lost subs/goals — bug-187); outbox game-row + appearance drains race-guarded (bug-188); `ivClose(cap)` clips iv on an early finish (bug-189); iv cap 40k→200k, `games.roster` snapshot (migration **0006**) so renames don't rewrite history, position swaps now log a `swap` event (bug-190). Suite **166/166**; `reconstructIv` verified vs real 9/12 data; migrations 0005+0006 apply local.
+- **NOT deployed / NOT migrated remote / 9/12 iv NOT backfilled** — see 🚀 Next phase. Prepared: `scratchpad/iv912.json` (the 9/12 iv to backfill). **Rollout order: migrate 0005+0006 FIRST, THEN deploy the worker** (postGame/getGameEvents reference the new columns unconditionally).
+
 ### Convert a played 🧪 Practice game → real (backfill records) — 2026-09-13
 - Problem: a game started as Practice that should have counted couldn't be made to count after full-time — `game.test` gated every write path and `closeGameRow` is `endedAt`-guarded, so flipping the picker wrote nothing back.
 - Fix: `pickGame` (`public/app.js`) now detects a **played** game converting practice→real (`wasTest && !g.test && g.gid && g.startedAt && state.lineup`) and backfills `queueGameRow()` + `queueAppearances(...)` (idempotent, keyed), then `flushOutbox()`. Career ledgers (`played`/`kept`) are intentionally NOT committed here — `commitGame` banks them at the next lineup build, so committing now would double-count. `sw.js` → **v19** (shell file changed).

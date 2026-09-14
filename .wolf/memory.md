@@ -1070,3 +1070,20 @@ Reset moved from `.gd-controls` onto the clock row as an edge tag mirroring Edit
 | Time | Action | File(s) | Outcome | ~Tokens |
 |------|--------|---------|---------|--------|
 | 19:04 | Convert practice→real game: backfill archive row + season appearances in pickGame (careers deferred to next-build) | public/app.js, public/sw.js(v19) | 152/152 tests pass | ~4k |
+| 2026-09-13 | Merged PR #1 (practice→real backfill) onto local 9da52b3, resolved .wolf conflicts, deployed | public/app.js, public/sw.js | 157/157 tests, deployed v feb254d3 | ~4k |
+| 2026-09-14 | Sept 12 game (15edd276) was recorded under "Man U", moved to real "Neon Ninjas" (e8f562e5) via guarded UPDATE on remote D1; identical rosters so appearances mapped | games table (remote) | 1 row; NN season totals=24.0, verified | ~3k |
+| 2026-09-14 | Root cause of "game shows, no data": career ledger played/kept empty on Neon Ninjas; prepared DB seed (neon_fix.sql), wrote HANDOFF-neon-ninjas-fix.md; classifier blocked agent write, handed cmd to user | teams doc (remote) | pending user-run write | ~6k |
+
+## Session: 2026-09-14 19:42
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 19:58 | Reconstruct Sept 12 Neon Ninjas event log (4 subs, Reyansh goal, 2 opp goals, full-time) | game_events (remote prod D1) | 8 rows INSERT OR IGNORE; getStats verifies Reyansh 1 goal; appearances/ledger untouched | ~9k |
+| 20:06 | Fix Season Archive empty-cache bug (toggleLogGame refetches when cached events []) + sw v20 | public/app.js, public/sw.js | 157/157; live GET returns 8 events so data was fine — display-only bug | ~6k |
+| 20:47 | Build Season-archive graphical game replay (per-player interval tracks) + persist lu.iv | migrations/0005, worker.js, stats.js, app.js, app.css, sw.js v21, test/stats | 161/161; reconstructIv verified on real 9/12 data; local migrate ok. NOT deployed/migrated remote | ~40k |
+| 22:06 | Address adversarial review: practice-event buffer, outbox game/appearance race guards, ivClose cap, cache-upgrade refetch, roster snapshot + swap events | app.js, outbox.js, lineup-core.js, worker.js, migrations/0006, test/* | 166/166; local migrate 0005+0006 ok. NOT deployed remote | ~55k |
+
+## Session: 2026-09-14 10:15
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|

@@ -832,6 +832,34 @@
   .logrow.open .loghead{border-bottom:1px dashed var(--line)}
   .loglist{list-style:none;margin:0;padding:8px 12px;display:flex;flex-direction:column;gap:4px;font-size:12.5px}
   .loglist .tnum{color:var(--muted);margin-right:6px}
+
+  /* Season archive — graphical replay of a past game. One row per player: a bar
+     where the bright fill sits WHERE the minutes happened (a sub is a real break),
+     the position played each period underneath, and ⚽ goal markers. Light-on-dark
+     mirror of the live Game Day track (which is dark-on-light on the --paper chip). */
+  .gtracks{padding:10px 12px;border-bottom:1px dashed var(--line);display:flex;flex-direction:column;gap:5px}
+  .gtrk-head,.gtrk-row{display:grid;grid-template-columns:62px 1fr;gap:8px;align-items:center}
+  .gtrk-name{font-size:12px;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .gtrk-row.opp .gtrk-name{color:var(--muted)}
+  .gtrk-cell{min-width:0}
+  .gtrk-cols,.gtrk-pos{display:grid;grid-template-columns:repeat(var(--q,4),1fr);gap:3px}
+  .gtrk-cols b{font:700 9px ui-monospace,Menlo,monospace;text-align:center;color:var(--muted)}
+  .gtrk-pos{margin-top:3px}
+  .gtrk-pos .pp{font:700 9px ui-monospace,Menlo,monospace;text-align:center;color:var(--muted)}
+  .gtrk-pos .pp-GK{color:#e8863f}
+  .gtrk-pos .pp-D{color:#5fbf8a}
+  .gtrk-pos .pp-F{color:#e0b84a}
+  .gtrk-bar{position:relative}
+  .gtrk-bar .track{display:flex;gap:3px;height:14px;position:relative}
+  .gtrk-bar .seg{position:relative;flex:1 1 0;height:14px;border-radius:3px;overflow:hidden;background:rgba(255,255,255,.08)}
+  .gtrk-bar .seg i{position:absolute;top:0;bottom:0}
+  .gtrk-bar .seg i.iv{background:rgba(233,238,228,.92)}
+  .gtrk-bar .track .notch{position:absolute;top:-3px;bottom:-3px;width:2px;background:rgba(255,255,255,.5)}
+  .gtrk-bar .gm{position:absolute;top:-5px;font-size:10px;line-height:1;transform:translateX(-50%);pointer-events:none;filter:drop-shadow(0 0 1px #000)}
+  .gtrk-leg{font-size:10.5px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px}
+  .gtrk-leg .sw{width:14px;height:9px;border-radius:2px;display:inline-block}
+  .gtrk-leg .sw.played{background:rgba(233,238,228,.92)}
+  .gtrk-leg .sw.sat{background:rgba(255,255,255,.08)}
   /* team switcher — lives in the FAB sheet, so it matches the .tab rows there */
   select.teamsel{width:100%;font-size:14px;font-weight:600;min-height:46px;padding:0 12px;border-radius:11px;
     background:var(--surface-2);border:1px solid var(--line);color:var(--ink)}

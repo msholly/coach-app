@@ -161,10 +161,22 @@ var LineupCore = (function () {
     var m = lu.iv[q] = {};
     (lu.periods[q] || []).forEach(function (id) { m[id] = [[0, null]]; });
   }
-  function ivClose(lu, q) {         // period q ends: open intervals close at 1
+  // Period q ends: open intervals close at `cap` (default 1 = full period). An
+  // early manual full-time ends mid-period — closeGameRow passes 1-rem so the iv
+  // matches the elapsed playing time finalizeAtElapsed banks, instead of claiming
+  // the whole period. Runs already ending before the cap are untouched; a run that
+  // starts at/after the cap (a sub made in the unplayed remainder) is dropped.
+  function ivClose(lu, q, cap) {
     var m = (lu && lu.iv || [])[q]; if (!m) return;
+    var c = (cap == null) ? 1 : Math.max(0, Math.min(1, cap));
     Object.keys(m).forEach(function (id) {
-      m[id].forEach(function (v) { if (v[1] == null) v[1] = 1; });
+      var runs = m[id];
+      for (var i = runs.length - 1; i >= 0; i--) {
+        var v = runs[i];
+        if (v[1] == null || v[1] > c) v[1] = c;
+        if (v[1] <= v[0]) runs.splice(i, 1);
+      }
+      if (!runs.length) delete m[id];
     });
   }
   // The clock-split at t = 1 - frac: outId's open run ends, inId's begins.

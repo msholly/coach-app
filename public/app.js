@@ -330,6 +330,7 @@
       g.gid=genToken(); g.startedAt=0; g.endedAt=0;   // archive identity — kickoff works offline
       g.recent=[]; g.stoppedAt=0;                     // Fix-a-mistake starts clean each game
       g.goals=[];                                     // every goal this game, newest first
+      g.plog=[];                                      // practice event buffer — fresh per game
       g.onBreak=false; g.breakKind=null; g.playerStats={};
       // Carry the coach's game link (test / linked schedule game) forward as the
       // pre-game intent. But a scheduled game that is already over drops back to
@@ -425,6 +426,9 @@
       else if(a.id===gkNow){ swapKeeper(id); }
       else if(LineupCore.applyPosSwap(lu,pi,a.id,id)){
         if(!state.game.started||onBreakNext()) lu.handEdited=true;
+        // Record the swap: it changes each player's position for the period but
+        // logged nothing, so the archive couldn't say who held which position when.
+        logEvent("swap",{a:a.id,b:id,forPeriod:pi+1},a.id);
         queueAppearances(curPi()+1);
         save(); renderLineup(); renderGame();
         toast(nameOf(a.id)+" ↔ "+nameOf(id));
@@ -2279,7 +2283,11 @@
     var g=state.game, lu=state.lineup;
     if(!g||!g.gid||!g.startedAt||g.endedAt||!lu) return;
     g.endedAt=nowMs();
-    LineupCore.ivClose(lu,curPi());   // a manual full-time end skips periodExpired
+    // Close open runs at the elapsed fraction, not 1 — an early manual full-time
+    // ends mid-period, and finalizeAtElapsed below clips appearances to the same
+    // point. Without the cap the archived iv would show a full period a player
+    // was credited only half of. No-op at a real full time (rem 0 → cap 1).
+    LineupCore.ivClose(lu,curPi(),1-remFrac());   // a manual full-time end skips periodExpired
     // Clip the ledgers to elapsed clock time BEFORE anything is banked: a game
     // that ends early must not archive, or commit to careers, periods that were
     // never played. No-op at a period boundary / full time (rem 0). (§1.1)
@@ -2520,17 +2528,15 @@
   function logEvent(kind,detail,playerId){
     var g=state.game; if(!g||!g.gid) return null;
     var evId="e"+nowMs().toString(36)+Math.floor(Math.random()*1679616).toString(36);
-    // A practice game keeps its evId and its local Fix-a-mistake / goal list (the
-    // clock, subs and scoring all work) but nothing is queued for the archive.
-    if(!g.test){
-      var ob=loadOutbox();
-      ob.events.push({
-        id:evId,
-        game_id:g.gid, at:nowMs(), period:g.period, secs:Math.max(0,g.secs), kind:kind,
-        player_id:playerId||null, detail:detail?JSON.stringify(detail):null
-      });
-      saveOutbox(ob);
-    }
+    var evRow={ id:evId, game_id:g.gid, at:nowMs(), period:g.period, secs:Math.max(0,g.secs),
+                kind:kind, player_id:playerId||null, detail:detail?JSON.stringify(detail):null };
+    // A real game queues to the outbox for the archive. A PRACTICE game keeps the
+    // same rows in a local per-game buffer (g.plog) instead: the server drops
+    // events for a game with no row, and the flusher would clear them as "sent".
+    // pickGame moves g.plog into the outbox on practice→real conversion, so nothing
+    // the coach tapped in a practice game is lost when it later counts (bug-185 class).
+    if(g.test){ (g.plog=g.plog||[]).push(evRow); }
+    else { var ob=loadOutbox(); ob.events.push(evRow); saveOutbox(ob); }
     // Mirror the undoable kinds for Fix a mistake (3a). Corrections never
     // re-enter the undo list, or undoing an undo would ping-pong forever.
     var undoable = !(detail&&detail.correction) &&
@@ -2555,7 +2561,13 @@
       // (the GC feed lags, so Home/Away on the Roster tab is authoritative).
       started_at:g.startedAt, ended_at:g.endedAt||null, opponent:(g.sched&&g.sched.opponent)||null,
       venue:state.venue==="away"?"away":"home",
-      us:g.us, them:g.them, periods:lu.Q, onfield:lu.N, minsper:lu.minsper
+      us:g.us, them:g.them, periods:lu.Q, onfield:lu.N, minsper:lu.minsper,
+      // Keep the interval ledger with the game so the archive can replay it (where
+      // inside each period every player's minutes fell). Storage is cheap.
+      iv:lu.iv||[],
+      // Snapshot the roster (id→name/number) as it stands now, so a later rename or
+      // removal never changes who a past game says played. Reports read this copy.
+      roster:(state.roster||[]).map(function(p){ return {id:p.id, name:p.name, num:p.num||null}; })
     };
     saveOutbox(ob);
   }
@@ -2595,10 +2607,12 @@
 
   /* ---------- game log read view (req 2 — §2.2e) ---------- */
   var openGid=null;
-  function loadArchive(){ try{ return JSON.parse(localStorage.getItem(KEY+":archive"))||{games:[],events:{}}; }catch(e){ return {games:[],events:{}}; } }
+  function loadArchive(){ try{ var a=JSON.parse(localStorage.getItem(KEY+":archive"))||{}; }catch(e){ a={}; }
+    a.games=a.games||[]; a.events=a.events||{}; a.appear=a.appear||{}; a.iv=a.iv||{}; a.roster=a.roster||{}; return a; }
   function saveArchive(a){
-    // keep cached events only for games still in the list — localStorage is finite
-    Object.keys(a.events).forEach(function(k){ if(!a.games.some(function(g){return g.id===k;})) delete a.events[k]; });
+    // keep cached per-game blobs only for games still in the list — localStorage is finite
+    var live=function(k){ return a.games.some(function(g){return g.id===k;}); };
+    [a.events,a.appear,a.iv,a.roster].forEach(function(m){ Object.keys(m).forEach(function(k){ if(!live(k)) delete m[k]; }); });
     try{ localStorage.setItem(KEY+":archive",JSON.stringify(a)); }catch(e){}
   }
   async function renderLog(){
@@ -2655,9 +2669,52 @@
       return '<div class="logrow'+(open?" open":"")+'">'
         +'<button class="loghead" data-act="log-game" data-gid="'+g.id+'">'
         +'<span>'+when+esc(vs)+(g.ended_at?"":" · in progress")+'</span><b class="tnum">'+g.us+"–"+g.them+"</b></button>"
-        +(open?logEventsHtml(arch,g):"")
+        +(open?gameTracksHtml(arch,g)+logEventsHtml(arch,g):"")
         +"</div>";
     }).join("");
+  }
+  // Graphical replay of a past game: one track per player showing WHERE inside
+  // each period their minutes fell (a sub is a real break), the position they
+  // played each period, and goal markers. Uses the stored interval ledger when
+  // present, else reconstructs it from the appearance rows + sub events. Same
+  // visual language as the live Game Day field, so a past game reads the same way.
+  function gameTracksHtml(arch,g){
+    var evs=arch.events[g.id]||[], ap=arch.appear[g.id]||[], Q=+g.periods||0;
+    if(!Q||!ap.length) return "";                 // no per-period data to draw
+    var iv=arch.iv[g.id]; if(!iv||!iv.length) iv=ArchiveStats.reconstructIv(g,evs,ap);
+    var pos=ArchiveStats.posByPeriod(ap,Q), lu={Q:Q,iv:iv};
+    var plen=(+g.minsper||10)*60;
+    // Names + order come from the game's OWN roster snapshot when it has one, so a
+    // later rename/removal never rewrites history; fall back to the live roster.
+    var snap=arch.roster[g.id], snapById={};
+    (snap||[]).forEach(function(p){ snapById[p.id]=p; });
+    function nm(id){ return snapById[id]?snapById[id].name:nameOf(id); }
+    var order=(snap&&snap.length)?snap:(state.roster||[]);
+    var seen={}, ids=[];
+    order.forEach(function(p){ if(pos[p.id]){ ids.push(p.id); seen[p.id]=1; } });
+    ap.forEach(function(a){ if(!seen[a.player_id]){ ids.push(a.player_id); seen[a.player_id]=1; } });
+    var goalsBy={}, opp=[];
+    evs.forEach(function(e){ if(e.kind!=="goal") return; var d=ArchiveStats.detailOf(e); if(d.d<0) return;
+      var el=1-Math.min(1,Math.max(0,(+e.secs||0)/plen)), m={p:+e.period,el:el};
+      if(d.side==="us"&&e.player_id){ (goalsBy[e.player_id]=goalsBy[e.player_id]||[]).push(m); }
+      else if(d.side==="them"){ opp.push(m); } });
+    function marks(list){ return (list||[]).map(function(m){
+      return '<i class="gm" style="left:'+r1(((m.p-1)+m.el)/Q*100)+'%">⚽</i>'; }).join(""); }
+    function cols(fn){ var s=""; for(var q=0;q<Q;q++) s+=fn(q); return s; }
+    var head='<div class="gtrk-head"><span class="gtrk-name"></span><span class="gtrk-cell">'
+      +'<span class="gtrk-cols">'+cols(function(q){return '<b>P'+(q+1)+'</b>';})+'</span></span></div>';
+    var rows=ids.map(function(id){
+      var pr=cols(function(q){ var pp=(pos[id]||{})[q]; return '<b class="pp'+(pp?" pp-"+pp:"")+'">'+(pp||"·")+'</b>'; });
+      return '<div class="gtrk-row"><span class="gtrk-name">'+esc(nm(id))+'</span>'
+        +'<span class="gtrk-cell"><span class="gtrk-bar">'+trackHtml(lu,id,Q,0)+marks(goalsBy[id])+'</span>'
+        +'<span class="gtrk-pos">'+pr+'</span></span></div>';
+    }).join("");
+    var oppRow=opp.length?'<div class="gtrk-row opp"><span class="gtrk-name">'+esc(g.opponent||"Opponent")+'</span>'
+      +'<span class="gtrk-cell"><span class="gtrk-bar"><span class="track">'
+      +cols(function(){return '<span class="seg past"></span>';})+'</span>'+marks(opp)+'</span></span></div>':"";
+    return '<div class="gtracks" style="--q:'+Q+'">'+head+rows+oppRow
+      +'<div class="gtrk-leg"><i class="sw played"></i>played <i class="sw sat"></i>sat '
+      +'<span class="gm">⚽</span>goal · notch = 3-period min</div></div>';
   }
   function logEventsHtml(arch,g){
     var evs=arch.events[g.id];
@@ -2683,6 +2740,7 @@
     if(ev.kind==="sub") return nameOf(ev.player_id)+" on for "+nameOf(d.out)+(d.correction?" (undo)":"");
     if(ev.kind==="keeper") return nameOf(ev.player_id)+" into goal for "+nameOf(d.out)+(d.correction?" (undo)":"");
     if(ev.kind==="keeper_next") return nameOf(ev.player_id)+" set as next keeper";
+    if(ev.kind==="swap") return nameOf(d.a||ev.player_id)+" ↔ "+nameOf(d.b)+" swapped positions";
     if(ev.kind==="period") return d.final ? "Full time "+d.us+"–"+d.them : (d.correction ? "Period set back to "+d.fixedTo : "End of period "+d.ended);
     if(ev.kind==="clock") return d.expired ? "Period clock expired" : (d.running ? "Clock started" : "Clock stopped");
     if(ev.kind==="clock_set") return "Clock set to "+mmssTxt(d.to||0)+(d.correction?" (undo)":(d.played?" — "+mmssTxt(d.played)+" counted as played":""));
@@ -2693,10 +2751,19 @@
     openGid = (openGid===gid) ? null : gid;
     var arch=loadArchive();
     drawLog(arch);
-    if(openGid && !arch.events[gid] && BACKEND && TEAM){
+    // Refetch when the cache is missing OR empty OR predates the graphical view.
+    // Empty events → the stale [] pins "No events recorded" (![] is false). A cache
+    // written before the track view has events but no appearances/iv key, so the
+    // tracks would never load — refetch until arch.appear[gid] is present.
+    var cached=arch.events[gid];
+    var needDetail = !cached || !cached.length || arch.appear[gid]===undefined;
+    if(openGid && needDetail && BACKEND && TEAM){
       try{
         var r=await fetch("/api/team/"+encodeURIComponent(TEAM)+"/games/"+encodeURIComponent(gid));
-        if(r.ok){ arch.events[gid]=(await r.json()).events||[]; saveArchive(arch); }
+        if(r.ok){ var j=await r.json();
+          arch.events[gid]=j.events||[]; arch.appear[gid]=j.appearances||[]; arch.iv[gid]=j.iv||null;
+          arch.roster[gid]=j.roster||null;
+          saveArchive(arch); }
       }catch(e){}
       drawLog(loadArchive());
     }
@@ -3015,6 +3082,16 @@
     // now would double-count those minutes.
     var converted = wasTest && !g.test && g.gid && g.startedAt && state.lineup;
     if(converted){
+      // A real game row now exists to hold them, so move everything the coach
+      // tapped while it was practice (subs, keeper swaps, goals, shots, clock)
+      // from the local buffer into the outbox. Without this the whole event log
+      // of a played practice game was lost on conversion (bug-185 class).
+      if(g.plog&&g.plog.length){
+        var ob=loadOutbox();
+        g.plog.forEach(function(e){ if(e.game_id===g.gid) ob.events.push(e); });
+        saveOutbox(ob);
+      }
+      g.plog=[];
       queueGameRow();
       queueAppearances(g.endedAt ? Math.min(g.period,state.lineup.Q) : curPi()+1);
     }

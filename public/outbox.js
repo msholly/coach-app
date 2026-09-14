@@ -36,8 +36,16 @@ var Outbox = (function () {
       for (var i = 0; i < gids.length; i++) {
         var row = load(key).games[gids[i]];
         if (!row) continue;
+        var sent = JSON.stringify(row);
         var rg = await post("/games", row);
-        if (rg.ok) { var og = load(key); delete og.games[gids[i]]; save(key, og); } else { gamesOk = false; }
+        if (rg.ok) {
+          // Clear it ONLY if it still matches what we posted. A score, full-time
+          // or iv update during the request replaces games[gid] in place — deleting
+          // by id would drop that newer snapshot unsent (lost score / end / iv).
+          // Leave a changed row queued; it re-posts next flush (idempotent upsert).
+          var og = load(key);
+          if (og.games[gids[i]] && JSON.stringify(og.games[gids[i]]) === sent) { delete og.games[gids[i]]; save(key, og); }
+        } else { gamesOk = false; }
       }
       // Events and appearances are foreign-keyed to the game row, so they wait
       // for it. Both drain in batches, and a failed batch leaves the rest queued.
@@ -54,10 +62,14 @@ var Outbox = (function () {
       while (gamesOk) {
         var cur = load(key), keys = Object.keys(cur.appearances).slice(0, 200);
         if (!keys.length) break;
+        var sentAp = {}; keys.forEach(function (k) { sentAp[k] = JSON.stringify(cur.appearances[k]); });
         var ra = await post("/appearances", { rows: keys.map(function (k) { return cur.appearances[k]; }) });
         if (!ra.ok) break;
         var oa = load(key);
-        keys.forEach(function (k) { delete oa.appearances[k]; });
+        // Same race guard as game rows: a mid-flight re-split changes a period's
+        // frac under the same key. Clear a key only if its value is still the one
+        // we posted; a changed one stays queued and re-posts (keyed upsert).
+        keys.forEach(function (k) { if (oa.appearances[k] && JSON.stringify(oa.appearances[k]) === sentAp[k]) delete oa.appearances[k]; });
         save(key, oa);
       }
       return true;
