@@ -1,53 +1,28 @@
 {
-  "session_id": "session-2026-09-08-2012",
-  "started": "2026-09-08T03:12:44.546Z",
+  "session_id": "session-2026-09-13-1859",
+  "started": "2026-09-13T18:59:31.793Z",
   "files_read": {
-    "c:/Users/msholly/coach-app/public/sw.js": {
+    "/home/user/coach-app/public/state.js": {
       "count": 1,
-      "tokens": 820,
-      "first_read": "2026-09-08T03:13:40.922Z"
+      "tokens": 955,
+      "first_read": "2026-09-13T18:59:46.298Z"
     },
-    "c:/Users/msholly/coach-app/public/app.js": {
-      "count": 7,
+    "/home/user/coach-app/public/app.js": {
+      "count": 5,
       "tokens": 43661,
-      "first_read": "2026-09-08T03:21:22.100Z"
+      "first_read": "2026-09-13T18:59:54.106Z"
     },
-    "c:/Users/msholly/coach-app/worker.js": {
+    "/home/user/coach-app/package.json": {
       "count": 1,
-      "tokens": 0,
-      "first_read": "2026-09-08T03:53:25.313Z"
-    },
-    "c:/Users/msholly/coach-app/src/worker.js": {
-      "count": 1,
-      "tokens": 10357,
-      "first_read": "2026-09-08T03:53:31.980Z"
-    },
-    "c:/Users/msholly/coach-app/public/index.html": {
-      "count": 1,
-      "tokens": 6315,
-      "first_read": "2026-09-08T04:06:31.107Z"
-    },
-    "c:/Users/msholly/coach-app/src/worker.test.mjs": {
-      "count": 1,
-      "tokens": 0,
-      "first_read": "2026-09-08T04:06:36.774Z"
-    },
-    "c:/Users/msholly/coach-app/test/worker.test.mjs": {
-      "count": 1,
-      "tokens": 2734,
-      "first_read": "2026-09-08T04:06:42.857Z"
-    },
-    "c:/Users/msholly/coach-app/migrations/0001_snacks.sql": {
-      "count": 1,
-      "tokens": 0,
-      "first_read": "2026-09-08T04:06:49.944Z"
+      "tokens": 161,
+      "first_read": "2026-09-13T19:46:48.125Z"
     }
   },
   "files_written": [],
   "edit_counts": {},
-  "anatomy_hits": 5,
-  "anatomy_misses": 3,
-  "repeated_reads_warned": 6,
+  "anatomy_hits": 3,
+  "anatomy_misses": 0,
+  "repeated_reads_warned": 4,
   "cerebrum_warnings": 0,
-  "stop_count": 3
+  "stop_count": 10
 }

@@ -2,20 +2,16 @@
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
 > Update this file at the end of every work phase so the next `/clear` resumes in 1 read.
-> Last updated: 2026-09-08
+> Last updated: 2026-09-07
 
 ---
 
 ## ✅ Done
 
-### Cross-device team-list sync (coach id) — 2026-09-08
-- **Problem:** the team LIST is device-local (`ayso-coach-v2:teams`); only each team's doc synced. New phone showed only the team links it had personally opened (PC had 2 teams, phone had 1). Not a cache/SW issue — `sw.js` never caches `/api/*`.
-- **`migrations/0004_coaches.sql`:** `coaches(id,doc,rev,updated_at,created_at)`. `id`=cid (a third unguessable capability token), `doc`=JSON `[{tok,name}]`. Same last-write-wins + `baseRev` shape as `teams`.
-- **Worker:** `GET/PUT /api/coach/:cid`, OUTSIDE `gate()` (cid IS the capability, like the snack board id). GET on a missing row returns `{doc:null,rev:0}` not 404.
-- **Client (`public/app.js`):** `coachSyncPull()` (upload server-missing teams then adopt server list), `coachRmw()` (read-modify-write, retry on 409), `coachRemoveTeam()`/`coachSetName()` (delete/rename via rmw, debounced). Runs at init + every foreground/online.
-- **Linking:** **📲 Link another device** button (`#linkDeviceBtn`, Roster tab) copies `origin/#c=<cid>`; opening it once on another phone adopts the cid (`linkCid` captured at boot, rev reset), unions that device's teams in, and both stay synced. Chosen over bundling cid into team links (those are texted to assistant coaches).
-- **Known limitation:** tombstone gap — a delete only sticks for devices that pull after it; a device still holding the deleted team re-adds it on its next push. Fine for one coach's few devices.
-- Tests: `test/worker.test.mjs` +6 → **Suite 157/157.** Verified live vs `wrangler dev` + local D1 (empty→create→union add→409→delete propagation all confirmed). **`0004` migrated LOCAL only; NOT migrated remote, NOT deployed** (user runs `npm run db:migrate` + `wrangler deploy`).
+### Convert a played 🧪 Practice game → real (backfill records) — 2026-09-13
+- Problem: a game started as Practice that should have counted couldn't be made to count after full-time — `game.test` gated every write path and `closeGameRow` is `endedAt`-guarded, so flipping the picker wrote nothing back.
+- Fix: `pickGame` (`public/app.js`) now detects a **played** game converting practice→real (`wasTest && !g.test && g.gid && g.startedAt && state.lineup`) and backfills `queueGameRow()` + `queueAppearances(...)` (idempotent, keyed), then `flushOutbox()`. Career ledgers (`played`/`kept`) are intentionally NOT committed here — `commitGame` banks them at the next lineup build, so committing now would double-count. `sw.js` → **v19** (shell file changed).
+- Coach action: Roster tab → "This game" picker → pick the scheduled game (or ✏️ Real game — not on the list). Season stats/appearances backfill immediately; career playing-time credit banks when you build your next game's lineup. Suite **152/152**. NOT committed at time of writing.
 
 ### Game Day pulls from the schedule + practice/test games — 2026-09-07
 - **"This game" picker (Roster tab, `#gameSel`):** 🧪 Practice / an optgroup of upcoming scheduled games (from the GC feed) / ✏️ manual real game. `loadSchedule()` fills it from `GET /api/team/:id/schedule`; `renderGamePicker()`/`pickGame()` in `public/app.js`.

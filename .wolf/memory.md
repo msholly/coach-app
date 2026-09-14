@@ -1065,20 +1065,8 @@ Reset moved from `.gd-controls` onto the clock row as an edge tag mirroring Edit
 |------|--------|---------|---------|--------|
 | 20:05 | Game Day pulls from the GC schedule + practice/test games. Added a "This game" picker (Practice / scheduled games / manual) on the Roster tab; linking a scheduled game sets venue+opponent and makes the game count. Unlinked = a test game (default) that writes nothing to the archive or career ledgers. | public/index.html, public/app.js, public/state.js, public/app.css, public/sw.js (v18) | Suite 149/149; +3 state tests (14/14); headless E2E 16/16 (practice writes 0 rows, linked game archives with opponent) | ~9k |
 
-## Session: 2026-09-07 16:46
+## Session: 2026-09-13 18:59
 
 | Time | Action | File(s) | Outcome | ~Tokens |
 |------|--------|---------|---------|--------|
-| 17:07 | Add 8U referee certification how-to modal to snack board | snacks.html, snacks.css, snacks.js, ref-step{1,2,3}.png | done | ~4k |
-
-## Session: 2026-09-08 20:12
-
-| Time | Action | File(s) | Outcome | ~Tokens |
-|------|--------|---------|---------|--------|
-
-## Session: 2026-09-08 (device sync)
-
-| Time | Action | File(s) | Outcome | ~Tokens |
-|------|--------|---------|---------|--------|
-| — | Diagnosed "phone shows only 1 team, PC has 2": team LIST is device-local (only each team's doc synced). Not a cache/SW issue (sw.js never caches /api/*). | (analysis) | root cause found | ~3k |
-| — | Cross-device team-list sync: new coach id (cid) capability token owning coaches(id,doc,rev) row; GET/PUT /api/coach/:cid outside gate(), same baseRev 409 dance as teams. Client coachSyncPull/coachRmw/coachRemoveTeam/coachSetName; "📲 Link another device" button emits #c=<cid>; linkCid adopted at boot. | migrations/0004_coaches.sql, src/worker.js, test/worker.test.mjs, public/{app.js,index.html} | 157/157 tests (6 new); verified live vs wrangler dev+local D1 (union add / 409 / delete). REMOTE migrate (npm run db:migrate) + deploy still pending — user's to run. | ~12k |
+| 19:04 | Convert practice→real game: backfill archive row + season appearances in pickGame (careers deferred to next-build) | public/app.js, public/sw.js(v19) | 152/152 tests pass | ~4k |
