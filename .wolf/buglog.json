@@ -3185,6 +3185,43 @@
       "related_bugs": ["bug-186"],
       "occurrences": 1,
       "last_seen": "2026-09-13T00:00:00.000Z"
+    },
+    {
+      "id": "bug-191",
+      "timestamp": "2026-09-21T00:00:00.000Z",
+      "error_message": "Coach: the 9/19 (vs Cammell) substitution/playing-time record is wrong — kids who would have sat were sent to play FOR the short-handed other team, but the app logged that as bench time.",
+      "file": "remote D1: appearances + games.iv (game 87c8de730c17ea2a55c67ddaa5aa81fe)",
+      "root_cause": "Data model has no concept of a player lent to the opponent. With 7 present and 6 on field, the one player off each period was recorded as benched, understating four kids' minutes and skewing season fairness (getPositions SUM(frac)) and the graphical replay (games.iv).",
+      "fix": "PARTIALLY REVERTED — do not trust as applied. Manual remote-D1 edit credited lent time back (all 7 full time, reclaimed minutes booked as D) across appearances + games.iv. BUT the live app re-synced seconds later: the 9/19 game is still doc.game (the active game) and is mis-linked to a WRONG schedule slot (doc.game.sched.opponent='Zapata', venue='away', startsAt 10/10/2026). queueGameRow/queueAppearances re-posted from the device, overwriting opponent Cammell->Zapata and venue home->away, and clobbering the appearance rows whose (player,period,pos) keys the app owns (Jeffrey back to 2.49, Oliver to 2.95) while my NEW D-key rows survived — leaving appearances self-inconsistent with games.iv and double-counting risk. ROOT LESSON: never edit the archive for a game that is still the active/syncing game on a device; the app is authoritative and last-write-wins by updated_at. Correct sequence: (1) coach fixes opponent/venue IN THE APP (source = the sched link), (2) game is no longer the current game / device has synced, (3) THEN delete-and-rewrite the game's appearances + iv cleanly. 9/12 Sheffield/away backfill held (that game is not active). See docs/season-data-corrections.md.",
+      "resolution": "RESOLVED 2026-09-22. Sequence that worked: (1) coach re-linked the 9/19 game to Cammell/home in the app (fixed doc.game.sched); (2) fixed the stale archive games row to Cammell/home directly (safe once the doc agreed); (3) after coach confirmed the Season tab showed Cammell, did a clean DELETE + reinsert of all 9/19 appearances (32 rows) + iv update via backups/reconstruct-9-19-appearances.sql. Verified all 7 present players full time; Bearett absent; iv consistent. Pre-reconstruction backup: backups/coach-sideline-prod-20260922-102956-pre-reconstruction.sql. RESIDUAL RISK: 9/19 was still doc.game.gid (current game) at write time; if the app re-syncs it as active it may revert the appearances — coach advised to start the next game to lock it in.",
+      "tags": ["data-correction", "appearances", "games.iv", "fairness", "lent-player", "neon-ninjas", "remote-d1", "manual-sql", "sync-contention", "do-not-edit-active-game", "resolved"],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-09-21T00:00:00.000Z"
+    },
+    {
+      "id": "bug-041",
+      "timestamp": "2026-09-22T00:00:00.000Z",
+      "error_message": "Season Archive: play-time bars didn't line up with the P1-P4 column headers, and the position letters (D/F/GK) floated midway between two bars so it was ambiguous which bar they annotated.",
+      "file": "public/app.css",
+      "root_cause": "The .gtrk-bar track used flex (flex:1 1 0 segments) while the P-header and position-letter rows used grid (repeat(var(--q),1fr)); flex/grid free-space rounding diverged so segment boundaries drifted from the header ticks. .gtrk-bar was also an inline span wrapping a block track. Vertically, letters sat 3px below their bar but only 5px above the next player's bar (.gtracks gap:5px) — near-equidistant, hence ambiguous.",
+      "fix": "Made .gtrk-bar display:block and switched .gtrk-bar .track to display:grid with the SAME grid-template-columns:repeat(var(--q,4),1fr);gap:3px as the header/letter rows (removed flex:1 1 0 from .gtrk-bar .seg) so all three share identical geometry. Bumped .gtracks gap 5px->12px and .gtrk-pos margin-top 3px->2px so each letter row hugs its bar with clear separation to the next player. Verified with a headless-Chrome screenshot of a harness linked against the real app.css.",
+      "tags": ["cosmetic", "css", "season-archive", "gtracks", "alignment", "flex-vs-grid", "resolved"],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-09-22T00:00:00.000Z"
+    },
+    {
+      "id": "bug-042",
+      "timestamp": "2026-09-23T00:00:00.000Z",
+      "error_message": "Season Archive 9/19 P4 bars showed ~23% played for everyone after prod was corrected to a full P4.",
+      "file": "public/app.js",
+      "root_cause": "toggleLogGame only refetched a game's detail when the localStorage archive cache was missing/empty/pre-track; once viewed, a game's iv/appearances were pinned forever, so server-side corrections never reached that device. (Local D1 was also a stale pull taken minutes before the P4 fix.)",
+      "fix": "toggleLogGame now always refetches on open (cached copy still draws first). Re-pulled prod to local. Also .gtrk-row align-items:start + name line-height:14px so names sit level with their bar; sw cache v24.",
+      "tags": ["season-archive", "stale-cache", "localStorage", "iv", "resolved"],
+      "related_bugs": ["bug-041"],
+      "occurrences": 1,
+      "last_seen": "2026-09-23T00:00:00.000Z"
     }
   ]
 }

@@ -116,6 +116,7 @@
 - `infrastructure-fixes-handoff.md` — Handoff — infrastructure audit fixes (~2464 tok)
 - `on-field-design-prompt.md` — "On the field" — design iteration prompt (~2270 tok)
 - `product-fixes-handoff.md` — Handoff — product review fixes (Codex second opinion) (~4656 tok)
+- `season-data-corrections.md` — Log of manual remote-D1 data fixes (Neon Ninjas 9/12 opponent backfill; 9/19 "lent to Cammell" sub-record correction). Rollback + rationale. (~600 tok)
 - `voice-game-log-plan.md` — "Call the game out loud" — voice event log + LLM reporting (~13143 tok)
 
 ## docs/handoffs/design_handoff_game_day_8b/

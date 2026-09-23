@@ -1087,3 +1087,86 @@ Reset moved from `.gd-controls` onto the clock row as an edge tag mirroring Edit
 
 | Time | Action | File(s) | Outcome | ~Tokens |
 |------|--------|---------|---------|--------|
+
+## Session: 2026-09-19 20:29
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-09-19 20:29
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-09-19 20:29
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-09-21 11:22
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-09-21 11:22
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-09-21 11:45
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-09-21 11:46
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-09-21 11:54
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 11:5x | Pulled Neon Ninjas' 2 real games from remote D1, gave report | (read-only queries) | 9/12 lost 1-2, 9/19 beat Cammell 4-2 | ~8k |
+| 12:0x | Fixed 9/19 "lent to Cammell" sub record + backfilled 9/12 opponent | remote D1 appearances+games.iv+games; docs/season-data-corrections.md; buglog bug-191 | all 7 present players now full time; 9/12=@Sheffield away; verified | ~4k |
+| 09-22 | App re-synced & clobbered 9/19 (mis-linked to future 'Zapata' sched slot); coach re-linked to Cammell/home in app | remote D1 games; docs/season-data-corrections.md; buglog bug-191 | opponent/venue reverted then RE-fixed in archive (Cammell/home, verified); playing-time fix still PENDING app quiesce | ~6k |
+| 09-22 | Full prod D1 backup | backups/coach-sideline-prod-20260922-102136.sql | 10 tables, 137 rows | ~1k |
+| 09-22 | Fixed stale Season-tab opponent (archive games row still Zapata after in-app relabel) | remote D1 games | opponent/venue -> Cammell/home; verified | ~2k |
+| 09-22 | RECONSTRUCTED 9/19 appearances+iv (clean delete+reinsert, 32 rows) after coach OK | remote D1 appearances+games.iv; backups/reconstruct-9-19-appearances.sql; docs+buglog | all 7 present players full time; verified; residual clobber risk until next game started | ~5k |
+| 09-23 | 9/19 P4 credited full time (clock not restarted; clock_set only counted 0.228) | remote D1 appearances+games.iv; backups/fix-9-19-p4-fulltime.sql | all present players ~4.0 periods; verified | ~3k |
+| 12:1x | Prod DB team cleanup: deleted "Man U" (records already migrated to Neon's Sheffield game: 8 events/26 appts) + 8 orphan/junk team rows + 1 empty snack_board; full backup to scratchpad/coach-db-backup-20260921.sql | remote D1 teams+snack_boards | 12→3 teams; 0 orphaned children; kept Neon Ninjas, BU5, 1 no-name team w/ unmigrated Aug-6 test game | ~30k |
+| 12:2x | Removed last no-name team + its Aug-6 test game (3 events) per user | remote D1 teams+games+game_events | prod now 2 teams (Neon Ninjas, BU5); 0 orphaned children | ~3k |
+
+## Session: 2026-09-22 10:11
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-09-22 10:11
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-09-22 10:26
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 10:35 | Season Archive cosmetic: bars align to P-columns (flex->grid track) + letters hug bar above (gap 5->12, pos mt 3->2) | public/app.css | verified via headless-chrome harness vs real app.css | ~9k |
+
+## Session: 2026-09-23 09:11
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-09-23 09:11
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 09:25 | Pulled prod D1 to local (drop+import; counts match prod) + bumped sw cache v22->v23 so the archive CSS fix ships | public/sw.js, .wrangler local D1 | verified local==remote counts; dev serves new css | ~6k |
+
+## Session: 2026-09-23 09:25
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 09:35 | Archive: always refetch game detail on open (stale iv pinned), names level with bars, sw v24, re-pulled prod->local | public/app.js, public/app.css, public/sw.js | 166/166 tests; screenshot verified | ~8k |
+| 09:35 | Archive: always refetch game detail on open (stale iv pinned), names level with bars, sw v24, re-pulled prod->local | public/app.js, public/app.css, public/sw.js | 166/166 tests; screenshot verified | ~8k |

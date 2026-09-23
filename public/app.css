@@ -837,21 +837,24 @@
      where the bright fill sits WHERE the minutes happened (a sub is a real break),
      the position played each period underneath, and ⚽ goal markers. Light-on-dark
      mirror of the live Game Day track (which is dark-on-light on the --paper chip). */
-  .gtracks{padding:10px 12px;border-bottom:1px dashed var(--line);display:flex;flex-direction:column;gap:5px}
+  .gtracks{padding:10px 12px;border-bottom:1px dashed var(--line);display:flex;flex-direction:column;gap:12px}
   .gtrk-head,.gtrk-row{display:grid;grid-template-columns:62px 1fr;gap:8px;align-items:center}
+  .gtrk-row{align-items:start}
+  .gtrk-row .gtrk-name{line-height:normal}
+
   .gtrk-name{font-size:12px;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .gtrk-row.opp .gtrk-name{color:var(--muted)}
   .gtrk-cell{min-width:0}
   .gtrk-cols,.gtrk-pos{display:grid;grid-template-columns:repeat(var(--q,4),1fr);gap:3px}
   .gtrk-cols b{font:700 9px ui-monospace,Menlo,monospace;text-align:center;color:var(--muted)}
-  .gtrk-pos{margin-top:3px}
+  .gtrk-pos{margin-top:2px}
   .gtrk-pos .pp{font:700 9px ui-monospace,Menlo,monospace;text-align:center;color:var(--muted)}
   .gtrk-pos .pp-GK{color:#e8863f}
   .gtrk-pos .pp-D{color:#5fbf8a}
   .gtrk-pos .pp-F{color:#e0b84a}
-  .gtrk-bar{position:relative}
-  .gtrk-bar .track{display:flex;gap:3px;height:14px;position:relative}
-  .gtrk-bar .seg{position:relative;flex:1 1 0;height:14px;border-radius:3px;overflow:hidden;background:rgba(255,255,255,.08)}
+  .gtrk-bar{position:relative;display:block}
+  .gtrk-bar .track{display:grid;grid-template-columns:repeat(var(--q,4),1fr);gap:3px;height:14px;position:relative}
+  .gtrk-bar .seg{position:relative;height:14px;border-radius:3px;overflow:hidden;background:rgba(255,255,255,.08)}
   .gtrk-bar .seg i{position:absolute;top:0;bottom:0}
   .gtrk-bar .seg i.iv{background:rgba(233,238,228,.92)}
   .gtrk-bar .track .notch{position:absolute;top:-3px;bottom:-3px;width:2px;background:rgba(255,255,255,.5)}

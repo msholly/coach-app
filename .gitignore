@@ -4,3 +4,5 @@ node_modules/
 *.log
 .DS_Store
 .wolf/backups/
+# D1 exports / sqlite copies — real kids' data, never commit
+backups/

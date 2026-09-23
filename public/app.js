@@ -2751,13 +2751,10 @@
     openGid = (openGid===gid) ? null : gid;
     var arch=loadArchive();
     drawLog(arch);
-    // Refetch when the cache is missing OR empty OR predates the graphical view.
-    // Empty events → the stale [] pins "No events recorded" (![] is false). A cache
-    // written before the track view has events but no appearances/iv key, so the
-    // tracks would never load — refetch until arch.appear[gid] is present.
-    var cached=arch.events[gid];
-    var needDetail = !cached || !cached.length || arch.appear[gid]===undefined;
-    if(openGid && needDetail && BACKEND && TEAM){
+    // Cached copy draws first (the sideline case); always refetch on open so a
+    // server-side correction (e.g. a fixed iv/appearances) replaces a stale cache
+    // instead of being pinned forever once the game has been viewed.
+    if(openGid && BACKEND && TEAM){
       try{
         var r=await fetch("/api/team/"+encodeURIComponent(TEAM)+"/games/"+encodeURIComponent(gid));
         if(r.ok){ var j=await r.json();
